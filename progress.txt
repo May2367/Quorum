@@ -1,0 +1,366 @@
+# Quorum Project Progress
+
+Source plan: `plan.txt` in this directory.
+
+## Current Status
+
+The project has been initialized as a Go repository and the first foundation milestone is in place. The work so far is limited to the current `quorum` directory.
+
+Peer transport foundation is now implemented and verified. There is no active background work currently running; the next implementation step is wiring `cmd/quorumd` into a static multi-node cluster and sending `Ready.Messages` through the peer transport.
+
+## Plan Check-In
+
+Checked against `plan.txt` and the current codebase.
+
+### Accomplished and Verified
+
+- Go module, repository layout, generated protobuf/gRPC bindings, and CI workflow exist.
+- `internal/raft` has a pure in-memory Raft core with leader election, heartbeats/AppendEntries-style replication, quorum commit advancement, current-term commit guard, and unit tests.
+- `internal/storage` has an append-only WAL with CRC records, `fsync`, torn-write recovery, typed Raft hard-state/entry records, and recovery tests.
+- `internal/server` has health/readiness endpoints, graceful HTTP shutdown support, a persistent Raft runtime wrapper, committed-log replay into the KV state machine, and initial KV gRPC handlers. `cmd/quorumd` now registers the KV gRPC service for single-node operation.
+- `internal/transport` has generated Raft peer protobuf types, Raft message conversion helpers, and a basic gRPC peer client/server foundation.
+- `internal/statemachine` has Put, Delete, CAS, revisions, session deduplication, and basic watch event channels with tests.
+- Dockerfile, Docker Compose scaffold, Terraform placeholder, chaos/linearizability placeholders, README, and architecture notes exist.
+- Latest verification passed with `go test ./...` and `go test -race ./...`.
+
+### Partially Implemented
+
+- Raft persistence exists, but snapshots, InstallSnapshot, and log compaction do not.
+- Writes route through a persistent Raft runtime in unit tests and in single-node `quorumd`; peer transport primitives now exist, but `quorumd` does not yet use them for multi-process replication.
+- Watches stream new events, but revision-resumable watch history is not implemented.
+- Docker Compose exists, but the containers currently run server stubs rather than a functional 3-node cluster.
+- Simulated networking has basic drain and partition controls, but not seeded randomized delay/drop/reorder/crash campaigns.
+
+### Not Started
+
+- ReadIndex linearizable reads.
+- Leader redirects and client retry/discovery behavior.
+- Porcupine history recording and linearizability checking.
+- Leases, keepalive, locks, and fencing-token enforcement.
+- Job scheduler workload.
+- Booking stress test.
+- Docker chaos scripts.
+- Benchmarks and `pprof` optimization.
+- Prometheus metrics and Grafana dashboard.
+- Full Terraform AWS deployment with EC2, EBS, IAM/SSM, and security groups.
+- GHCR/ECR image publishing.
+
+### Next Highest-Value Step
+
+Wire `cmd/quorumd` into a static 3-node local cluster: parse peer maps, register the Raft peer service, and send `Ready.Messages` through the peer client.
+
+## Completed So Far
+
+### Repository Structure
+
+Created the planned project layout:
+
+- `cmd/quorumd`
+- `cmd/quorumctl`
+- `cmd/scheduler-demo`
+- `cmd/booking-test`
+- `internal/raft`
+- `internal/storage`
+- `internal/statemachine`
+- `internal/server`
+- `internal/simnet`
+- `internal/transport`
+- `client`
+- `proto`
+- `test/linearizability`
+- `test/chaos`
+- `deploy/docker`
+- `deploy/terraform`
+- `deploy/scripts`
+- `docs`
+- `.github/workflows`
+
+### Go Module and Tooling
+
+- Added `go.mod` with module path `quorum`.
+- Installed Go in the environment using `apt-get`.
+- Formatted Go files with `gofmt`.
+- Added a GitHub Actions CI workflow that runs:
+  - `go test ./...`
+  - `go test -race ./...`
+
+Verification completed:
+
+- `go test ./...` passed.
+- `go test -race ./...` passed.
+
+### Phase 1: Raft Core
+
+Implemented an initial pure Raft package in `internal/raft`.
+
+Done:
+
+- Node states: follower, candidate, leader.
+- Terms, voting, leader tracking, commit index.
+- Randomized-style election timeout hook with deterministic test control.
+- Leader election.
+- Heartbeat and AppendEntries-style message flow.
+- Log replication.
+- Basic conflict handling.
+- Commit advancement by quorum.
+- Leader commit rule requiring entries from the leader's current term.
+- Ready-style output containing hard state, unstable entries, outbound messages, and committed entries.
+
+Tests added:
+
+- Election chooses one leader.
+- Leader replicates a proposal to the cluster.
+- Stale leader steps down when it receives a higher-term append.
+
+Not done yet:
+
+- Full server integration that uses the persistent runtime for peer traffic and client proposals.
+- End-to-end crash/restart recovery of a networked multi-node server.
+- Snapshots and InstallSnapshot.
+- Log compaction.
+- Deterministic randomized simulation across many seeds.
+- Figure 8 style stress coverage.
+
+### Phase 2: KV Service, Correctness, and Deployability
+
+Implemented the first in-memory KV state machine in `internal/statemachine`.
+
+Done:
+
+- Put.
+- Delete.
+- Compare-and-swap.
+- Revision counter.
+- Basic watch event publication.
+- Client session deduplication using client ID and sequence number.
+- Tests for CAS, deduplication, and watch events.
+
+Server/deployability foundation:
+
+- Added `cmd/quorumd` server with separate HTTP health and client gRPC listeners for single-node operation.
+- Added `/healthz` endpoint.
+- Added `/readyz` endpoint.
+- Added graceful SIGINT/SIGTERM HTTP shutdown.
+- Added a persistent Raft runtime wrapper that loads state from disk and persists `Ready` entries/hard state before returning messages or committed entries.
+- Added committed-log replay on startup so the KV state machine is rebuilt from durable Raft entries.
+- Added initial KV gRPC handlers for Get, Put, Delete, CompareAndSwap, and Watch; write handlers route commands through the persistent Raft runtime before applying committed entries.
+- Registered the KV gRPC service in `cmd/quorumd` for single-node operation.
+- Added basic `quorumctl` Get, Put, Delete, and CAS commands backed by the Go client package.
+- Added basic config flags:
+  - `-node-id`
+  - `-client-addr`
+  - `-peer-addr`
+  - `-data-dir`
+
+Not done yet:
+
+- Client leader redirects.
+- ReadIndex linearizable reads.
+- Real multi-node server runtime.
+- Multi-node persistent Raft/KV integration with peer traffic.
+- Porcupine history recording and checking.
+
+### Storage
+
+Implemented an append-only WAL in `internal/storage`.
+
+Done:
+
+- Length-prefixed records.
+- CRC per record.
+- `fsync` on append.
+- Recovery reader.
+- Torn-write handling by truncating incomplete/corrupt trailing records.
+- Tests for append/read and torn-record recovery.
+- Typed Raft WAL records for hard state and log entries.
+- Recovery loader that reconstructs the latest hard state and entry list.
+- Tests that recovered Raft state can seed a new Raft node.
+- Tests for repeated entry-index records keeping the latest record.
+
+Not done yet:
+
+- Snapshot file format.
+- Snapshot install and restore.
+- Log compaction integration.
+
+### Simulated Network
+
+Added `internal/simnet` scaffold.
+
+Done:
+
+- In-memory cluster wrapper around Raft nodes.
+- Message draining between nodes.
+- Basic partition/heal controls.
+
+Not done yet:
+
+- Seeded randomness.
+- Delay, drop, reorder, and crash/restart simulation.
+- Long-running randomized fault campaigns.
+
+### Transport and Client
+
+Added scaffolds:
+
+- `internal/transport`
+- `client`
+- `cmd/quorumctl`
+- `proto/quorum.proto`
+
+Done:
+
+- Protobuf service contract draft for Get, Put, Delete, CompareAndSwap, and Watch.
+- Generated Go protobuf and gRPC bindings from `proto/quorum.proto`.
+- Minimal client config object plus basic Get, Put, Delete, and CAS operations.
+- CLI supports endpoint configuration plus basic Get, Put, Delete, and CAS commands.
+
+Not done yet:
+
+- Retry logic.
+- Leader redirect handling.
+- Revision-resumable watch history and reconnect behavior.
+
+### Phase 3: Leases, Locks, and Watches
+
+Partially started:
+
+- Basic watch event channel exists in the in-memory KV state machine.
+- Revisions are assigned to writes and delete events.
+
+Not done yet:
+
+- Leased keys with TTL.
+- Keepalive.
+- Lock API.
+- Fencing token checks.
+- Revision-resumable watch streams.
+- Stale lock-holder rejection test.
+
+### Phase 4: Job Scheduler
+
+Scaffolded only:
+
+- Added `cmd/scheduler-demo`.
+
+Not done yet:
+
+- Job queue in KV.
+- Worker agent.
+- Lease-based job claims.
+- Heartbeats.
+- Fencing-token result writes.
+- Failure demo with worker kills and leader kill.
+- Exactly-once completion verification.
+
+### Phase 5: Stress Test, Chaos, and Benchmarks
+
+Scaffolded only:
+
+- Added `cmd/booking-test`.
+- Added `test/chaos/README.md`.
+- Added `test/linearizability/README.md`.
+
+Not done yet:
+
+- Booking test implementation.
+- 1,000-client/100-seat CAS workload.
+- Docker chaos automation.
+- Toxiproxy, `tc netem`, iptables, or container-kill scripts.
+- Benchmarks.
+- `pprof` profiling.
+- Optimization work.
+
+### Phase 6: Cloud, CI, and Polish
+
+Partially started:
+
+- Added Dockerfile.
+- Added Docker Compose file for three local nodes.
+- Added Terraform placeholder README.
+- Added local demo script.
+- Added CI workflow.
+- Added project README.
+- Added architecture notes.
+
+Not done yet:
+
+- Fully functional containerized cluster.
+- Published image.
+- Terraform AWS infrastructure.
+- EC2 systemd bootstrap.
+- EBS volume attachment/mounting.
+- IAM role for SSM.
+- Security group rules.
+- AWS chaos tests.
+- Prometheus metrics.
+- Grafana dashboard.
+- Benchmark results.
+- Demo recording/GIF.
+
+## Current Working State
+
+The repository currently builds and tests as a local Go codebase. The implemented pieces are still foundation-level components, not a complete distributed coordination service.
+
+The next logical work item is to connect the Raft core, durable store, and real server runtime:
+
+1. Wire `cmd/quorumd` into a static three-node cluster.
+2. Send `Ready.Messages` through the peer client and process responses.
+3. Add multi-node write waiting and proposal tracking.
+4. Add client retry and leader redirect handling.
+5. Add ReadIndex before claiming linearizable reads.
+
+## Verification Evidence
+
+The following commands were run successfully after Go was installed:
+
+```sh
+go test ./...
+go test -race ./...
+```
+
+Both passed. Latest verification after committed-log replay and peer transport foundation also passed with `go test ./...` and `go test -race ./...`. Live restart smoke evidence: after writing `replay/key=persisted`, stopping `quorumd`, and restarting it with the same data directory, `quorumctl get replay/key` returned `persisted revision=1` before any new write.
+
+
+## Direction Update: Settlement Ledger Workload
+
+Decision recorded in this session: Quorum remains a general Raft coordination
+service, not a payment system, but the flagship workload will become a
+settlement-ledger demo. This preserves the distributed-systems focus while
+making leases, fencing tokens, watches, and exactly-once execution concrete.
+
+Plan impact:
+
+- Phase 3 stale fencing-token testing will use the ledger itself as the guarded
+  resource instead of a separate fake storage resource.
+- Phase 4 job scheduler becomes a settlement/payout worker system. Jobs move
+  integer cents from escrow accounts to merchant accounts.
+- The ledger API is deliberately small: `CreateAccount`, `Transfer`, and
+  `GetBalance`.
+- `Transfer` will be a replicated state-machine command so two-account updates
+  are atomic under Raft.
+- Settlement jobs will use the job ID as the idempotency key.
+- Final verification should check every job exactly once, total money conserved,
+  no negative balances, no stale-worker writes accepted, and no committed
+  transfers lost across leader failover.
+- The standalone seat-booking stress test is no longer core scope. Its
+  concurrency target can be folded into the settlement-ledger workload.
+- Payment-processor features remain explicitly out of scope: reserve/capture,
+  voids, transaction listing, double-entry accounting, auth, merchants,
+  webhooks, refunds, and external payment integrations.
+
+Implementation direction:
+
+- The next server milestone should use an asynchronous Raft driver rather than
+  the earlier minimal synchronous peer-message loop.
+- The async driver should own the persistent Raft runtime behind an event loop,
+  accept ticks/peer messages/proposals over channels, persist each `Ready`, send
+  outbound messages through per-peer workers, apply committed entries in order,
+  and complete client proposals once their commands are applied.
+
+Status of this update:
+
+- `plan.txt` now has an appended amendment describing the settlement-ledger
+  workload, async driver direction, phase impacts, out-of-scope boundaries, and
+  optional extras.
+- No code has been changed for this direction yet.
