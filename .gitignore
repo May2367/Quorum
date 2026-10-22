@@ -1,0 +1,11 @@
+bin/
+data/
+*.log
+*.test
+coverage.out
+
+.DS_Store
+.idea/
+.vscode/
+
+deploy/docker/*.env

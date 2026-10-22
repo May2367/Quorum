@@ -1,0 +1,301 @@
+## Final plan: “Quorum”, a Raft-based coordination service (Go, deployable on AWS)
+
+**What it is:** a replicated key-value store built on Raft, extended with leases, fencing tokens, and watches (an etcd/ZooKeeper-style core). Two workloads prove it: a fault-tolerant job scheduler (flagship) and a seat-booking stress test (correctness). The system runs locally with one command and deploys to a 3-node cluster across AWS availability zones.
+
+### Scope
+- **In:** Raft core, KV with CAS, leases, fencing tokens, watches, job scheduler, booking stress test, chaos testing, containerization, AWS deployment with Terraform, CI, observability.
+- **Out (future work only):** dynamic membership changes, multi-Raft sharding, a custom wire protocol, a config service, TLS/auth, Kubernetes.
+### Tech stack
+- **Language and tooling:** Go modules, `go test -race`, `golangci-lint`, `pprof`
+- **Transport:** gRPC + protobuf
+- **Persistence:** your own append-only WAL (CRC per record, `fsync`, torn-write handling on recovery) plus snapshots
+- **Linearizability:** Porcupine
+- **Chaos:** Docker Compose with Toxiproxy, `tc netem`, or iptables, plus `docker kill`
+- **Containers:** multi-stage Dockerfile ending in distroless or scratch; GHCR or ECR for images
+- **AWS:** EC2 (3 nodes across AZs), EBS volumes for WAL data, security groups, and an IAM role for SSM access (no open SSH)
+- **IaC:** Terraform (VPC, subnets, security groups, instances, volumes, IAM)
+- **CI and observability:** GitHub Actions, Prometheus, Grafana
+### Repository layout
+
+```
+quorum/
+├── cmd/
+│ ├── quorumd/ # server binary
+│ ├── quorumctl/ # CLI client
+│ ├── scheduler-demo/ # job scheduler workload
+│ └── booking-test/ # seat-booking stress test
+├── internal/
+│ ├── raft/ # consensus core (no I/O, no network)
+│ ├── storage/ # WAL + snapshots
+│ ├── statemachine/ # KV, leases, watches, sessions, revisions
+│ ├── server/ # gRPC API, config, health endpoints, glue
+│ ├── simnet/ # deterministic simulated network and clock
+│ └── transport/ # real gRPC peer transport
+├── client/ # Go client library (retries, leader redirect)
+├── proto/
+├── test/
+│ ├── linearizability/ # history recording + Porcupine checks
+│ └── chaos/ # Docker- and AWS-based fault injection scripts
+├── deploy/
+│ ├── docker/ # Dockerfile (multi-stage, distroless), compose.yml
+│ ├── terraform/ # VPC, subnets, SGs, EC2, EBS, IAM
+│ └── scripts/ # bootstrap, run-demo, teardown
+└── docs/ # architecture diagram, correctness writeup
+```
+
+### Architecture
+
+```
+Clients / Workers ──gRPC──► Node (leader or follower)
+ ├─ API layer: Get/Put/Delete/CAS, Lease, Lock, Watch
+ ├─ Session layer: client ID + sequence numbers (dedup)
+ ├─ Raft module: election, replication, commit
+ ├─ Storage: WAL + snapshots on disk
+ └─ State machine: KV map, leases, watchers, revision counter
+```
+
+### Design decisions to make deliberately
+
+These double as interview answers.
+
+- **Raft is decoupled from the state machine.** Raft orders and commits opaque commands, and the state machine applies them.
+- **Raft is a pure state machine.** A single goroutine owns all Raft state. Messages and timer ticks come in over channels, and outputs (messages to send, entries to persist, entries to apply) go out over channels. No direct I/O, which makes the simulator trivial.
+- **Linearizable reads via ReadIndex.** The leader confirms leadership with a heartbeat round, then serves the read.
+- **Exactly-once writes.** Each client has an ID and an incrementing sequence number, and the state machine dedups retries so a retry after a leader change can’t apply twice.
+- **Deterministic apply.** Never read the local clock during apply. The leader stamps time into commands so lease expiries are identical on every replica.
+- **Fencing tokens.** Use the Raft log index at which a lock was granted, which is monotonic by construction. Storage-side checks reject writes carrying an older token.
+- **Revision-based watches.** A client can resume from revision N after reconnecting or a leader change without missing events.
+- **Persist before respond.** Term, votedFor, and log entries must be durable before replying to any RPC that depends on them.
+- **Snapshots plus log compaction** to bound log growth, with InstallSnapshot for lagging followers.
+### Deployability requirements (build in Phase 2, not Phase 6)
+
+Retrofitting these later is painful, so treat them as part of the server design.
+
+- **Stable node identity:** a fixed node ID and a static peer list per node. Dynamic membership stays out of scope.
+- **Configuration:** node ID, peer addresses, data directory, client port, and peer port via flags or env vars.
+- **Durable data directory:** the WAL and snapshots live on a mounted volume (a Docker volume locally, an EBS volume on AWS). Losing term or votedFor on restart breaks Raft safety.
+- **Health and readiness endpoints:** `/healthz` (process is up) and `/readyz` (node knows a leader or is part of a quorum), for Compose, scripts, and monitoring.
+- **Graceful shutdown:** on SIGTERM, stop accepting requests, flush and fsync the WAL, and close connections.
+- **Client discovery:** the client takes a list of node addresses, tries any, and follows leader redirects, so no load balancer is needed.
+### Phases
+### Phase 1: Raft core
+- Skeleton, CI with `-race`, and the simulated network and clock (controllable delay, drop, reorder, partition, seeded randomness, so every failure is reproducible from its seed).
+- Leader election with randomized timeouts and heartbeats.
+- Log replication, conflict resolution, the commit rule (a leader only commits entries from its own term by counting replicas), and the apply loop.
+- Persistence, crash/restart recovery, snapshots, InstallSnapshot, and log compaction.
+- **Done when:** the cluster survives randomized partitions and crashes across many seeds, and tests cover the Figure 8 scenario. Use MIT 6.5840’s public lab test descriptions as your checklist.
+### Phase 2: KV service, correctness, and deployability
+- Get/Put/Delete/CAS API, client sessions and dedup, ReadIndex reads, leader redirects, and a client library with retries.
+- All deployability requirements above: config, stable identity, data directory, health endpoints, graceful shutdown, client discovery.
+- Record operation histories under fault injection and check them with Porcupine.
+- **Done when:** thousands of fault-injected random operations pass the linearizability check across many seeds, and a node can be started, stopped with SIGTERM, and restarted from its data directory without losing state.
+### Phase 3: Leases, locks, and watches
+- Leased keys with TTL and keepalive, a lock API returning fencing tokens, and a revision-resumable watch stream.
+- A test storage resource that rejects stale fencing tokens.
+- **Done when:** a test shows a paused or partitioned lock holder can no longer corrupt data after losing its lock.
+### Phase 4: Flagship workload, job scheduler
+- A job queue stored in the KV, plus a worker agent that claims jobs via lease, heartbeats, runs the job, and writes its result with its fencing token.
+- If a worker dies, its lease expires and another worker takes the job.
+- **Demo:** 20 workers, 500 jobs, random worker kills and a leader kill mid-run.
+- **Verify:** every job completes exactly once, and no stale worker’s result is accepted.
+### Phase 5: Stress test, chaos, and benchmarks
+- **Booking test:** 1,000 concurrent clients competing for 100 seats using CAS, with leader kills and partitions. Assert zero oversells.
+- **Chaos in real containers:** a 3-5 node Docker Compose cluster with randomized rounds of latency, packet loss, partitions, and `docker kill`. The script reports pass/fail by seed and reruns failures.
+- **Benchmarks:** write throughput and p50/p99 latency by cluster size and client count, leader failover time, and restart recovery time.
+- **Optimization:** profile with `pprof`, then try batching, pipelined AppendEntries, and group-commit fsync. Record before/after numbers.
+### Phase 6: Cloud, CI, and polish
+
+**Containerization**
+
+- Multi-stage Dockerfile ending in a distroless or scratch image, and a Compose file (3 nodes, a volume per node) so anyone can run the demo with `docker compose up`.
+- Publish the image to GHCR or ECR from CI on tagged releases.
+
+**AWS deployment**
+
+- Terraform provisions a VPC with three subnets in three AZs, one EC2 instance per AZ (`t3.small` is plenty), one EBS volume per node for the data directory, and an IAM instance profile for SSM.
+- **Security groups:** the peer port is open only between the three nodes, and the client and metrics ports only to your IP (or the monitoring host).
+- Each instance runs the container under systemd (restart on failure, mounted data volume, config from an env file).
+- A bootstrap script starts the cluster, and a `run-demo` script runs the scheduler and booking tests against it from a separate client machine (or your laptop).
+- **Cloud-specific chaos tests:** stop an instance, kill the leader process, and block the peer port with a security group change or iptables, then verify recovery.
+- **Numbers to record separately from local results:** cross-AZ commit latency, p50/p99 write latency, throughput, and leader failover time.
+
+**CI/CD**
+
+- On every PR: unit tests with `-race`, the simulation suite, lint, and a short Compose-based chaos run.
+- On tagged releases: build and push the image. The AWS deploy stays a manual `terraform apply` so CI doesn’t need cloud credentials.
+
+**Observability**
+
+- Prometheus metrics (term, commit index, election count, request latency) and one Grafana dashboard screenshot for the README.
+
+**Cost control and showability**
+
+- Set an AWS budget alert before you start.
+- Run the cluster only for demos and benchmarking, then `terraform destroy`. A few hours on three small instances costs very little.
+- Record a short demo video or GIF (kill the leader, workers keep finishing jobs) and put it in the README, so the project stays showable after teardown.
+
+**README**
+
+- Architecture diagram and demo walkthrough.
+- **Run it locally:** one command with Compose.
+- **Deploy to AWS:** `terraform apply`, bootstrap, run-demo, destroy, plus a cost note.
+- **Results:** local vs. cross-AZ numbers in a table.
+- **Correctness section:** your test methodology (simulator, Porcupine, chaos, seeds). This is what separates the project from a tutorial implementation.
+- **Limitations:** static membership, no TLS or auth, not production-grade.
+### Resume bullets to aim for
+
+Fill in numbers only after you’ve measured them.
+
+- Implemented the Raft consensus algorithm in Go (leader election, log replication, WAL persistence, snapshots), with a linearizable KV store supporting CAS, TTL leases, fencing tokens, and revision-based watches.
+- Verified correctness with Porcupine across N seeded, fault-injected runs (leader kills, partitions, crash-recovery) using a deterministic network simulator, Docker chaos tests, and the Go race detector in CI.
+- Built a lease-based job scheduler where 20 workers completed 500 jobs exactly once under repeated worker and leader failures; fencing tokens blocked all stale-holder writes.
+- Achieved zero oversells across 1,000 concurrent clients under injected failures.
+- Deployed a 3-node cluster across 3 AWS AZs with Terraform and validated failover on real infrastructure (leader failover in X ms, Y ops/sec at p99 Z ms cross-AZ), with GitHub Actions CI running race-detector tests, deterministic simulation, and containerized chaos runs.
+### Risks
+- **Subtle Raft bugs.** Build the simulator and tests first, and run many seeds. Most bugs only show up under unusual interleavings.
+- **Go-specific pitfalls.** Watch for goroutine leaks, data races on shared state, and responding to an RPC before `fsync` completes. Single-goroutine ownership of Raft state plus `-race` catches most of this.
+- **Deployability retrofitting.** Build config, health endpoints, and graceful shutdown in Phase 2, or AWS deployment will drag.
+- **Cost and security.** Keep peer and client ports locked to specific sources, use SSM instead of open SSH, and always tear down. There’s no TLS or auth in scope, so don’t expose the cluster to the open internet.
+- **Scope creep.** Hold the line on the “Out” list above.
+- **If you need to cut scope:** drop Grafana first, then Terraform polish, then watches. A Compose demo plus a recorded AWS run is still a good result. Never cut the linearizability testing, the scheduler demo, or the AWS deployment itself, since “deployed on AWS” is one of the gaps this project exists to fill.
+
+## Plan amendment: settlement-ledger workload and async server driver
+
+This amendment refines the project framing and workload while preserving the
+original distributed-systems scope above. The project is still **Quorum**, a
+general Raft-based coordination service in Go. It is not being rebranded as a
+payment system. The settlement ledger is the flagship workload used to prove the
+coordination platform's guarantees under crashes, partitions, stale workers, and
+leader failover.
+
+### Updated framing
+
+README and demo material should lead with the platform and its guarantees:
+
+> Quorum is a Raft-based coordination service in Go, verified under partitions
+> and crashes, with leases, fencing tokens, watches, and a fault-tolerant
+> settlement workload that demonstrates exactly-once execution under failure.
+
+The ledger exists to make the correctness properties concrete. It should remain
+small and deliberately domain-limited so the project stays focused on consensus,
+persistence, leases, fencing, and verification.
+
+### Async Raft server driver
+
+The next server milestone should use an asynchronous Raft driver rather than a
+minimal synchronous send-on-request loop. The driver should own the persistent
+Raft runtime behind a single event loop, persist each `Ready` before publishing
+outbound messages, apply committed entries in order, and route messages through
+per-peer outbound queues.
+
+Planned driver responsibilities:
+
+- Accept ticks, peer messages, and client proposals over channels.
+- Persist unstable entries and hard state before sending dependent messages.
+- Send `Ready.Messages` through the gRPC peer transport using background peer
+  workers.
+- Track proposals until their corresponding committed command is applied.
+- Apply committed entries to the state machine in log order.
+- Surface leadership or commitment failures to client handlers without blocking
+  the Raft event loop indefinitely.
+
+This is a larger Phase 2 implementation step than the minimal static-cluster
+driver, but it is the better eventual server shape and supports the settlement
+workload more naturally.
+
+### Phase 3 impact: leases, locks, watches
+
+The stale fencing-token storage test should be implemented through the ledger
+instead of as a separate artificial storage resource. A stale worker should be
+able to attempt a ledger write with an old fencing token, and the ledger command
+application should reject it.
+
+Phase 3 still includes:
+
+- Leased keys with TTL and keepalive.
+- Lock or claim API returning fencing tokens.
+- Revision-resumable watches.
+- A stale-holder rejection test.
+
+The difference is that the stale-holder test now exercises the same ledger state
+machine used by the flagship workload.
+
+### Phase 4 impact: flagship settlement workload
+
+The job-scheduler workload becomes a settlement or payout workload. Jobs are
+settlement tasks such as "move X cents from escrow to merchant M." A worker
+claims a job through Quorum's lease/lock mechanism, receives a fencing token,
+and executes the settlement as a ledger transfer using the job ID as the
+idempotency key.
+
+The ledger API is intentionally minimal:
+
+- `CreateAccount(account_id, initial_cents)`
+- `Transfer(from_account, to_account, cents, idempotency_key, fencing_token)`
+- `GetBalance(account_id)`
+
+Balances are integer cents. `Transfer` is a state-machine command so the
+two-account debit/credit update is atomic under the Raft log. The ledger should
+not grow into a payment processor.
+
+The demo target remains:
+
+- 20 workers.
+- 500 settlement jobs.
+- Random worker kills.
+- A leader kill mid-run.
+- Final invariant verification from the replicated ledger state.
+
+Required invariants:
+
+- Every settlement job is applied exactly once.
+- Total money is conserved.
+- No account balance goes negative.
+- No duplicate transfer is accepted for the same job ID.
+- No stale-worker write is accepted after lease loss.
+- Leader failover does not lose committed transfers.
+
+Include a fencing-necessity mode for demonstration only. In that mode,
+idempotency can be disabled or bypassed for the relevant result path so the demo
+can show that fencing tokens alone prevent a stale worker from corrupting the
+ledger. This mode must be clearly marked as a correctness demonstration, not as a
+production behavior or benchmark path.
+
+### Phase 5 impact: stress test, chaos, and benchmarks
+
+The standalone seat-booking stress test is dropped from the core plan and
+replaced by ledger invariant testing. The 1,000-client concurrency target can be
+kept as a load level for the ledger/settlement workload instead of a separate
+booking domain.
+
+Still in scope:
+
+- Docker/container chaos with latency, packet loss, partitions, and process
+  kills.
+- Seeded failure runs that can be replayed.
+- Benchmarks for write throughput, p50/p99 latency, failover time, and restart
+  recovery time.
+- `pprof`-guided optimization.
+- Batching, pipelined AppendEntries, and group-commit fsync experiments with
+  before/after numbers.
+
+### Explicitly out of scope for the ledger
+
+These are future work only and should not be added to the core implementation:
+
+- Reserve, Capture, Void, or ListTransactions APIs.
+- Double-entry bookkeeping.
+- Payment authentication or authorization.
+- Merchant onboarding or merchant objects.
+- Webhooks.
+- Refunds.
+- External payment-processor behavior.
+- A separate Redis/MySQL scheduler project.
+
+### Optional extras if ahead of schedule
+
+- Redis baseline comparison showing the stale-holder failure that fencing
+  tokens prevent.
+- A bounded outbox slice where the ledger emits events to a simulated external
+  system that can fail or time out.
+- A written optimization report with before/after numbers.
