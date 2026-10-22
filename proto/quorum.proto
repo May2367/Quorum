@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package quorum.v1;
+
+option go_package = "quorum/proto;proto";
+
+service Quorum {
+  rpc Get(GetRequest) returns (GetResponse);
+  rpc Put(PutRequest) returns (PutResponse);
+  rpc Delete(DeleteRequest) returns (DeleteResponse);
+  rpc CompareAndSwap(CompareAndSwapRequest) returns (CompareAndSwapResponse);
+  rpc Watch(WatchRequest) returns (stream WatchEvent);
+}
+
+service RaftPeer {
+  rpc Send(RaftMessage) returns (RaftMessages);
+}
+
+message GetRequest {
+  string key = 1;
+}
+
+message GetResponse {
+  string value = 1;
+  uint64 revision = 2;
+}
+
+message PutRequest {
+  string key = 1;
+  string value = 2;
+  string client_id = 3;
+  uint64 sequence = 4;
+}
+
+message PutResponse {
+  uint64 revision = 1;
+}
+
+message DeleteRequest {
+  string key = 1;
+  string client_id = 2;
+  uint64 sequence = 3;
+}
+
+message DeleteResponse {
+  uint64 revision = 1;
+}
+
+message CompareAndSwapRequest {
+  string key = 1;
+  string expected = 2;
+  string value = 3;
+  string client_id = 4;
+  uint64 sequence = 5;
+}
+
+message CompareAndSwapResponse {
+  bool swapped = 1;
+  string current = 2;
+  uint64 revision = 3;
+}
+
+message WatchRequest {
+  string prefix = 1;
+  uint64 after_revision = 2;
+}
+
+message WatchEvent {
+  string key = 1;
+  string value = 2;
+  uint64 revision = 3;
+  bool deleted = 4;
+}
+
+message RaftEntry {
+  uint64 index = 1;
+  uint64 term = 2;
+  bytes data = 3;
+}
+
+message RaftMessage {
+  uint32 type = 1;
+  uint64 from = 2;
+  uint64 to = 3;
+  uint64 term = 4;
+  uint64 log_term = 5;
+  uint64 index = 6;
+  uint64 commit = 7;
+  repeated RaftEntry entries = 8;
+  bool reject = 9;
+  uint64 reject_hint = 10;
+  bytes context = 11;
+}
+
+message RaftMessages {
+  repeated RaftMessage messages = 1;
+}
