@@ -107,3 +107,37 @@ func TestReplayCommittedLogIgnoresUncommittedEntries(t *testing.T) {
 		t.Fatalf("get uncommitted err = %v, want ErrKeyNotFound", err)
 	}
 }
+
+func TestReplayCommittedLogToleratesCommittedCompareFailure(t *testing.T) {
+	dir := t.TempDir()
+	rt, err := OpenPersistentRaft(dir, 1, []uint64{1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rt.Node().SetElectionTimeout(1)
+	if _, err := rt.Tick(); err != nil {
+		t.Fatal(err)
+	}
+	svc := NewKVService(rt, statemachine.NewKV())
+	if _, err := svc.propose(context.Background(), statemachine.Command{Type: statemachine.CmdPut, Key: "cas", Value: "current", ClientID: "c1", Sequence: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.propose(context.Background(), statemachine.Command{Type: statemachine.CmdCAS, Key: "cas", Expect: "stale", Value: "bad", ClientID: "c2", Sequence: 1}); err == nil {
+		t.Fatal("expected stale CAS to fail")
+	}
+	if err := rt.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	replayed := statemachine.NewKV()
+	if err := ReplayCommittedLog(dir, replayed); err != nil {
+		t.Fatal(err)
+	}
+	got, err := replayed.Get("cas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Value != "current" || got.Revision != 1 {
+		t.Fatalf("replayed value = %+v, want current revision 1", got)
+	}
+}

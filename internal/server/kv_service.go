@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"quorum/internal/raft"
 	"quorum/internal/statemachine"
@@ -24,16 +26,41 @@ type waitingRaftRuntime interface {
 	ProposeAndWait(context.Context, []byte) (raft.Ready, error)
 }
 
+type applyingRaftRuntime interface {
+	AppliesCommittedEntries() bool
+}
+
+type applyResult struct {
+	result statemachine.Result
+	err    error
+}
+
 type KVService struct {
 	pb.UnimplementedQuorumServer
 
-	mu      sync.Mutex
-	raft    raftRuntime
-	machine *statemachine.KV
+	mu        sync.Mutex
+	raft      raftRuntime
+	machine   *statemachine.KV
+	serviceID uint64
+	nextID    uint64
+	waiters   map[string]chan applyResult
 }
 
+var nextKVServiceID atomic.Uint64
+
 func NewKVService(rt raftRuntime, machine *statemachine.KV) *KVService {
-	return &KVService{raft: rt, machine: machine}
+	return &KVService{
+		raft:      rt,
+		machine:   machine,
+		serviceID: nextKVServiceID.Add(1),
+		waiters:   map[string]chan applyResult{},
+	}
+}
+
+func (s *KVService) SetRaftRuntime(rt raftRuntime) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.raft = rt
 }
 
 func (s *KVService) Get(_ context.Context, req *pb.GetRequest) (*pb.GetResponse, error) {
@@ -127,43 +154,98 @@ func (s *KVService) Watch(req *pb.WatchRequest, stream grpc.ServerStreamingServe
 }
 
 func (s *KVService) propose(ctx context.Context, cmd statemachine.Command) (statemachine.Result, error) {
+	if s.usesAsyncApply() {
+		return s.proposeAndWaitApplied(ctx, cmd)
+	}
+	return s.proposeAndApplyReady(ctx, cmd)
+}
+
+func (s *KVService) proposeAndWaitApplied(ctx context.Context, cmd statemachine.Command) (statemachine.Result, error) {
+	cmd.ProposalID = s.nextProposalID()
+	payload, err := encodeCommand(cmd)
+	if err != nil {
+		return statemachine.Result{}, status.Error(codes.Internal, err.Error())
+	}
+	waiter := s.registerWaiter(cmd.ProposalID)
+	if _, err := s.raft.Propose(payload); err != nil {
+		s.removeWaiter(cmd.ProposalID)
+		return statemachine.Result{}, status.Error(codes.Internal, err.Error())
+	}
+	select {
+	case res := <-waiter:
+		if res.err != nil {
+			return res.result, statusFromStateMachine(res.err)
+		}
+		return res.result, nil
+	case <-ctx.Done():
+		s.removeWaiter(cmd.ProposalID)
+		return statemachine.Result{}, status.Error(codes.DeadlineExceeded, ctx.Err().Error())
+	}
+}
+
+func (s *KVService) proposeAndApplyReady(ctx context.Context, cmd statemachine.Command) (statemachine.Result, error) {
+	cmd.ProposalID = s.nextProposalID()
 	payload, err := encodeCommand(cmd)
 	if err != nil {
 		return statemachine.Result{}, status.Error(codes.Internal, err.Error())
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	rd, err := s.proposeRaft(ctx, payload)
 	if err != nil {
 		return statemachine.Result{}, status.Error(codes.Internal, err.Error())
 	}
+	return s.applyReadyForCommandLocked(rd, cmd)
+}
+
+func (s *KVService) ApplyCommitted(entries []raft.Entry) {
+	if len(entries) == 0 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, ent := range entries {
+		s.applyEntryLocked(ent, nil)
+	}
+}
+
+func (s *KVService) applyReadyForCommandLocked(rd raft.Ready, cmd statemachine.Command) (statemachine.Result, error) {
 	var result statemachine.Result
 	var applied bool
 	for _, ent := range rd.Committed {
-		if len(ent.Data) == 0 {
-			continue
-		}
-		committed, err := decodeCommand(ent.Data)
+		res, applyErr, matched, err := s.applyEntryLocked(ent, &cmd)
 		if err != nil {
 			return statemachine.Result{}, status.Error(codes.Internal, err.Error())
 		}
-		committed.LogIndex = ent.Index
-		res, applyErr := s.machine.Apply(committed)
-		if sameCommand(committed, cmd) {
+		if matched {
 			result = res
 			applied = true
 			if applyErr != nil {
 				return result, statusFromStateMachine(applyErr)
 			}
-		} else if applyErr != nil && !errors.Is(applyErr, statemachine.ErrDuplicateLower) {
-			return statemachine.Result{}, statusFromStateMachine(applyErr)
 		}
 	}
 	if !applied {
 		return statemachine.Result{}, status.Error(codes.Unavailable, "proposal was not committed locally")
 	}
 	return result, nil
+}
+
+func (s *KVService) applyEntryLocked(ent raft.Entry, target *statemachine.Command) (statemachine.Result, error, bool, error) {
+	if len(ent.Data) == 0 {
+		return statemachine.Result{}, nil, false, nil
+	}
+	committed, err := decodeCommand(ent.Data)
+	if err != nil {
+		return statemachine.Result{}, nil, false, err
+	}
+	committed.LogIndex = ent.Index
+	res, applyErr := s.machine.Apply(committed)
+	if committed.ProposalID != "" {
+		s.completeWaiterLocked(committed.ProposalID, applyResult{result: res, err: applyErr})
+	}
+	matched := target != nil && sameCommand(committed, *target)
+	return res, applyErr, matched, nil
 }
 
 func encodeCommand(cmd statemachine.Command) ([]byte, error) {
@@ -184,7 +266,8 @@ func sameCommand(a, b statemachine.Command) bool {
 		a.Value == b.Value &&
 		a.Expect == b.Expect &&
 		a.ClientID == b.ClientID &&
-		a.Sequence == b.Sequence
+		a.Sequence == b.Sequence &&
+		a.ProposalID == b.ProposalID
 }
 
 func statusFromStateMachine(err error) error {
@@ -215,4 +298,37 @@ func (s *KVService) proposeRaft(ctx context.Context, payload []byte) (raft.Ready
 		return waiter.ProposeAndWait(ctx, payload)
 	}
 	return s.raft.Propose(payload)
+}
+
+func (s *KVService) usesAsyncApply() bool {
+	runtime, ok := s.raft.(applyingRaftRuntime)
+	return ok && runtime.AppliesCommittedEntries()
+}
+
+func (s *KVService) nextProposalID() string {
+	next := atomic.AddUint64(&s.nextID, 1)
+	return fmt.Sprintf("kv-%d-%d", s.serviceID, next)
+}
+
+func (s *KVService) registerWaiter(proposalID string) <-chan applyResult {
+	ch := make(chan applyResult, 1)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.waiters[proposalID] = ch
+	return ch
+}
+
+func (s *KVService) removeWaiter(proposalID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.waiters, proposalID)
+}
+
+func (s *KVService) completeWaiterLocked(proposalID string, res applyResult) {
+	ch, ok := s.waiters[proposalID]
+	if !ok {
+		return
+	}
+	delete(s.waiters, proposalID)
+	ch <- res
 }

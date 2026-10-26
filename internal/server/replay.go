@@ -1,6 +1,8 @@
 package server
 
 import (
+	"errors"
+
 	"quorum/internal/statemachine"
 	"quorum/internal/storage"
 )
@@ -19,9 +21,15 @@ func ReplayCommittedLog(dir string, machine *statemachine.KV) error {
 			return err
 		}
 		cmd.LogIndex = ent.Index
-		if _, err := machine.Apply(cmd); err != nil {
+		if _, err := machine.Apply(cmd); err != nil && !isReplayNoopError(err) {
 			return err
 		}
 	}
 	return nil
+}
+
+func isReplayNoopError(err error) bool {
+	return errors.Is(err, statemachine.ErrKeyNotFound) ||
+		errors.Is(err, statemachine.ErrCompareFailed) ||
+		errors.Is(err, statemachine.ErrDuplicateLower)
 }

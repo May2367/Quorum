@@ -21,6 +21,7 @@ type AsyncRaftOptions struct {
 	SendTimeout      time.Duration
 	ElectionTimeout  int
 	HeartbeatTimeout int
+	Apply            func([]raft.Entry)
 }
 
 type AsyncRaft struct {
@@ -31,6 +32,7 @@ type AsyncRaft struct {
 	closeOnce   sync.Once
 	sender      ReadyMessageSender
 	sendTimeout time.Duration
+	apply       func([]raft.Entry)
 	waiters     []*proposalWaiter
 }
 
@@ -82,9 +84,14 @@ func OpenAsyncRaft(dir string, id uint64, peers []uint64, opts AsyncRaftOptions)
 		closed:      make(chan struct{}),
 		sender:      opts.Sender,
 		sendTimeout: sendTimeout,
+		apply:       opts.Apply,
 	}
 	go driver.run()
 	return driver, nil
+}
+
+func (d *AsyncRaft) AppliesCommittedEntries() bool {
+	return d.apply != nil
 }
 
 func (d *AsyncRaft) Tick() (raft.Ready, error) {
@@ -188,7 +195,15 @@ func (d *AsyncRaft) handle(req asyncRequest) (raft.Ready, error) {
 
 func (d *AsyncRaft) afterReady(rd raft.Ready) {
 	d.completeWaiters(rd)
+	d.applyCommitted(rd.Committed)
 	d.dispatch(rd.Messages)
+}
+
+func (d *AsyncRaft) applyCommitted(entries []raft.Entry) {
+	if d.apply == nil || len(entries) == 0 {
+		return
+	}
+	d.apply(entries)
 }
 
 func (d *AsyncRaft) completeWaiters(rd raft.Ready) {

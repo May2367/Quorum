@@ -45,10 +45,17 @@ func main() {
 	if len(peers.IDs) == 1 {
 		asyncOpts.ElectionTimeout = 1
 	}
+	machine := statemachine.NewKV()
+	if err := server.ReplayCommittedLog(cfg.DataDir, machine); err != nil {
+		log.Fatalf("replay committed log: %v", err)
+	}
+	kvService := server.NewKVService(nil, machine)
+	asyncOpts.Apply = kvService.ApplyCommitted
 	raftNode, err := server.OpenAsyncRaft(cfg.DataDir, cfg.NodeID, peers.IDs, asyncOpts)
 	if err != nil {
 		log.Fatalf("open raft runtime: %v", err)
 	}
+	kvService.SetRaftRuntime(raftNode)
 	defer func() {
 		if err := raftNode.Close(); err != nil {
 			log.Printf("close raft runtime: %v", err)
@@ -60,13 +67,8 @@ func main() {
 		}
 	}
 
-	machine := statemachine.NewKV()
-	if err := server.ReplayCommittedLog(cfg.DataDir, machine); err != nil {
-		log.Fatalf("replay committed log: %v", err)
-	}
-
 	clientGRPCServer := grpc.NewServer()
-	pb.RegisterQuorumServer(clientGRPCServer, server.NewKVService(raftNode, machine))
+	pb.RegisterQuorumServer(clientGRPCServer, kvService)
 	clientListener, err := net.Listen("tcp", cfg.ClientAddr)
 	if err != nil {
 		log.Fatalf("listen client grpc: %v", err)

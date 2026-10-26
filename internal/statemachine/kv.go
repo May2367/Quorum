@@ -20,13 +20,14 @@ const (
 )
 
 type Command struct {
-	Type     CommandType
-	Key      string
-	Value    string
-	Expect   string
-	ClientID string
-	Sequence uint64
-	LogIndex uint64
+	Type       CommandType
+	Key        string
+	Value      string
+	Expect     string
+	ClientID   string
+	Sequence   uint64
+	ProposalID string
+	LogIndex   uint64
 }
 
 type Result struct {

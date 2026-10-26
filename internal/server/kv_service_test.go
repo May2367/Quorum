@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"quorum/internal/raft"
 	"quorum/internal/statemachine"
 	pb "quorum/proto"
 
@@ -138,5 +139,52 @@ func TestKVServiceUsesAsyncProposalWaiter(t *testing.T) {
 	}
 	if got.GetValue() != "1" {
 		t.Fatalf("value = %q, want 1", got.GetValue())
+	}
+}
+
+func TestKVServiceUsesAsyncApplyNotifications(t *testing.T) {
+	machine := statemachine.NewKV()
+	svc := NewKVService(nil, machine)
+	rt, err := OpenAsyncRaft(t.TempDir(), 1, []uint64{1}, AsyncRaftOptions{
+		ElectionTimeout: 1,
+		Apply:           svc.ApplyCommitted,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rt.Close()
+	svc.SetRaftRuntime(rt)
+	if _, err := rt.Tick(); err != nil {
+		t.Fatal(err)
+	}
+	put, err := svc.Put(context.Background(), &pb.PutRequest{Key: "async", Value: "applied", ClientId: "c1", Sequence: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if put.GetRevision() != 1 {
+		t.Fatalf("revision = %d, want 1", put.GetRevision())
+	}
+	got, err := svc.Get(context.Background(), &pb.GetRequest{Key: "async"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.GetValue() != "applied" {
+		t.Fatalf("value = %q, want applied", got.GetValue())
+	}
+}
+
+func TestKVServiceApplyCommittedAppliesExternalEntry(t *testing.T) {
+	svc := NewKVService(nil, statemachine.NewKV())
+	data, err := encodeCommand(statemachine.Command{Type: statemachine.CmdPut, Key: "peer", Value: "committed", ClientID: "c1", Sequence: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.ApplyCommitted([]raft.Entry{{Index: 7, Term: 2, Data: data}})
+	got, err := svc.Get(context.Background(), &pb.GetRequest{Key: "peer"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.GetValue() != "committed" || got.GetRevision() != 1 {
+		t.Fatalf("get = %+v, want committed revision 1", got)
 	}
 }

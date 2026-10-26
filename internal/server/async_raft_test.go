@@ -118,3 +118,36 @@ func TestAsyncRaftProposeAndWaitHonorsContext(t *testing.T) {
 		t.Fatal("expected context timeout")
 	}
 }
+
+func TestAsyncRaftAppliesCommittedEntries(t *testing.T) {
+	applied := make(chan []raft.Entry, 2)
+	driver, err := OpenAsyncRaft(t.TempDir(), 1, []uint64{1}, AsyncRaftOptions{
+		ElectionTimeout: 1,
+		Apply: func(entries []raft.Entry) {
+			applied <- append([]raft.Entry(nil), entries...)
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer driver.Close()
+	if _, err := driver.Tick(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := driver.Propose([]byte("apply me")); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.After(time.Second)
+	for {
+		select {
+		case entries := <-applied:
+			for _, ent := range entries {
+				if string(ent.Data) == "apply me" {
+					return
+				}
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for applied proposal entry")
+		}
+	}
+}
