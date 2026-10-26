@@ -166,6 +166,9 @@ func (s *LockService) applyEntryLocked(ent raft.Entry, target *LockCommand) (sta
 		return statemachine.LockResult{}, nil, false, nil
 	}
 	cmd, err := decodeLockCommand(ent.Data)
+	if errors.Is(err, errForeignCommand) {
+		return statemachine.LockResult{}, nil, false, nil
+	}
 	if err != nil {
 		return statemachine.LockResult{}, nil, false, err
 	}
@@ -195,13 +198,19 @@ func (s *LockService) applyCommandLocked(cmd LockCommand) (statemachine.LockResu
 }
 
 func encodeLockCommand(cmd LockCommand) ([]byte, error) {
-	return json.Marshal(cmd)
+	return encodeServiceCommand("lock", cmd)
 }
 
 func decodeLockCommand(data []byte) (LockCommand, error) {
 	var cmd LockCommand
+	if enveloped, err := decodeServiceCommand(data, "lock", &cmd); enveloped {
+		return cmd, err
+	}
 	if err := json.Unmarshal(data, &cmd); err != nil {
 		return LockCommand{}, err
+	}
+	if cmd.Type != LockCmdAdvance && (cmd.Name == "" || cmd.Holder == "") {
+		return LockCommand{}, errForeignCommand
 	}
 	return cmd, nil
 }

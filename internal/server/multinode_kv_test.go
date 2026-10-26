@@ -53,36 +53,42 @@ func (s *directRaftSender) Send(ctx context.Context, msg raft.Message) ([]raft.M
 }
 
 type multiNodeKVCluster struct {
-	sender       *directRaftSender
-	nodes        map[uint64]*AsyncRaft
-	services     map[uint64]*KVService
-	lockServices map[uint64]*LockService
-	machines     map[uint64]*statemachine.KV
-	locks        map[uint64]*statemachine.LockTable
-	servers      map[uint64]*grpc.Server
-	listeners    map[uint64]net.Listener
-	addrs        map[uint64]string
+	sender         *directRaftSender
+	nodes          map[uint64]*AsyncRaft
+	services       map[uint64]*KVService
+	lockServices   map[uint64]*LockService
+	ledgerServices map[uint64]*LedgerService
+	machines       map[uint64]*statemachine.KV
+	locks          map[uint64]*statemachine.LockTable
+	ledgers        map[uint64]*statemachine.Ledger
+	servers        map[uint64]*grpc.Server
+	listeners      map[uint64]net.Listener
+	addrs          map[uint64]string
 }
 
 func newMultiNodeKVCluster(t *testing.T) *multiNodeKVCluster {
 	t.Helper()
 	ids := []uint64{1, 2, 3}
 	c := &multiNodeKVCluster{
-		sender:       newDirectRaftSender(),
-		nodes:        map[uint64]*AsyncRaft{},
-		services:     map[uint64]*KVService{},
-		lockServices: map[uint64]*LockService{},
-		machines:     map[uint64]*statemachine.KV{},
-		locks:        map[uint64]*statemachine.LockTable{},
-		servers:      map[uint64]*grpc.Server{},
-		listeners:    map[uint64]net.Listener{},
-		addrs:        map[uint64]string{},
+		sender:         newDirectRaftSender(),
+		nodes:          map[uint64]*AsyncRaft{},
+		services:       map[uint64]*KVService{},
+		lockServices:   map[uint64]*LockService{},
+		ledgerServices: map[uint64]*LedgerService{},
+		machines:       map[uint64]*statemachine.KV{},
+		locks:          map[uint64]*statemachine.LockTable{},
+		ledgers:        map[uint64]*statemachine.Ledger{},
+		servers:        map[uint64]*grpc.Server{},
+		listeners:      map[uint64]net.Listener{},
+		addrs:          map[uint64]string{},
 	}
 	for _, id := range ids {
 		machine := statemachine.NewKV()
 		locks := statemachine.NewLockTable()
+		ledger := statemachine.NewLedger()
 		svc := NewKVService(nil, machine)
 		lockSvc := NewLockService(nil, locks)
+		ledgerSvc := NewLedgerService(nil, ledger)
 		electionTimeout := 100
 		if id == 1 {
 			electionTimeout = 1
@@ -95,6 +101,7 @@ func newMultiNodeKVCluster(t *testing.T) *multiNodeKVCluster {
 			Apply: func(entries []raft.Entry) {
 				svc.ApplyCommitted(entries)
 				lockSvc.ApplyCommitted(entries)
+				ledgerSvc.ApplyCommitted(entries)
 			},
 		})
 		if err != nil {
@@ -102,12 +109,15 @@ func newMultiNodeKVCluster(t *testing.T) *multiNodeKVCluster {
 		}
 		svc.SetRaftRuntime(node)
 		lockSvc.SetRaftRuntime(node)
+		ledgerSvc.SetRaftRuntime(node)
 		c.sender.Add(id, node)
 		c.nodes[id] = node
 		c.services[id] = svc
 		c.lockServices[id] = lockSvc
+		c.ledgerServices[id] = ledgerSvc
 		c.machines[id] = machine
 		c.locks[id] = locks
+		c.ledgers[id] = ledger
 		addr, grpcServer, listener := serveKVService(t, svc)
 		c.addrs[id] = addr
 		c.servers[id] = grpcServer
@@ -280,6 +290,51 @@ func TestMultiNodeLockAcquireReplicatesFenceToken(t *testing.T) {
 		t.Fatalf("fencing token = 0")
 	}
 	cluster.WaitLockOnNodes(t, "settlement/job-9", "worker-1", res.FencingToken, 1, 2, 3)
+}
+
+func TestMultiNodeLedgerRejectsStaleLockHolderTransfer(t *testing.T) {
+	cluster := newMultiNodeKVCluster(t)
+	cluster.ElectLeader(t, 1)
+	cluster.WaitLeaderKnown(t, 1)
+
+	ledger := cluster.ledgerServices[1]
+	if err := ledger.CreateAccount(context.Background(), "escrow", 1_000); err != nil {
+		t.Fatal(err)
+	}
+	if err := ledger.CreateAccount(context.Background(), "merchant", 0); err != nil {
+		t.Fatal(err)
+	}
+
+	first, err := cluster.lockServices[1].Acquire(context.Background(), "settlement/job-stale", "worker-1", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ledger.Transfer(context.Background(), "escrow", "merchant", 100, "job-current", first.FencingToken); err != nil {
+		t.Fatal(err)
+	}
+	if err := cluster.lockServices[1].Advance(context.Background(), 1); err != nil {
+		t.Fatal(err)
+	}
+	second, err := cluster.lockServices[1].Acquire(context.Background(), "settlement/job-stale", "worker-2", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.FencingToken <= first.FencingToken {
+		t.Fatalf("second token = %d, want > %d", second.FencingToken, first.FencingToken)
+	}
+	if _, err := ledger.Transfer(context.Background(), "escrow", "merchant", 100, "job-new-owner", second.FencingToken); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ledger.Transfer(context.Background(), "escrow", "merchant", 50, "job-stale-holder", first.FencingToken); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("stale transfer err = %v, want FailedPrecondition", err)
+	}
+	balance, err := ledger.GetBalance(context.Background(), "escrow")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if balance != 800 {
+		t.Fatalf("escrow balance = %d, want 800", balance)
+	}
 }
 
 func TestMultiNodeKVClientRedirectReplicatesWrite(t *testing.T) {

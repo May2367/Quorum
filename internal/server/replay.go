@@ -17,6 +17,9 @@ func ReplayCommittedLog(dir string, machine *statemachine.KV) error {
 			continue
 		}
 		cmd, err := decodeCommand(ent.Data)
+		if errors.Is(err, errForeignCommand) {
+			continue
+		}
 		if err != nil {
 			return err
 		}

@@ -257,6 +257,9 @@ func (s *KVService) applyEntryLocked(ent raft.Entry, target *statemachine.Comman
 		return statemachine.Result{}, nil, false, nil
 	}
 	committed, err := decodeCommand(ent.Data)
+	if errors.Is(err, errForeignCommand) {
+		return statemachine.Result{}, nil, false, nil
+	}
 	if err != nil {
 		return statemachine.Result{}, nil, false, err
 	}
@@ -270,13 +273,19 @@ func (s *KVService) applyEntryLocked(ent raft.Entry, target *statemachine.Comman
 }
 
 func encodeCommand(cmd statemachine.Command) ([]byte, error) {
-	return json.Marshal(cmd)
+	return encodeServiceCommand("kv", cmd)
 }
 
 func decodeCommand(data []byte) (statemachine.Command, error) {
 	var cmd statemachine.Command
+	if enveloped, err := decodeServiceCommand(data, "kv", &cmd); enveloped {
+		return cmd, err
+	}
 	if err := json.Unmarshal(data, &cmd); err != nil {
 		return statemachine.Command{}, err
+	}
+	if cmd.Type != statemachine.CmdBarrier && cmd.Key == "" {
+		return statemachine.Command{}, errForeignCommand
 	}
 	return cmd, nil
 }
