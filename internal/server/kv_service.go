@@ -67,9 +67,12 @@ func (s *KVService) SetRaftRuntime(rt raftRuntime) {
 	s.raft = rt
 }
 
-func (s *KVService) Get(_ context.Context, req *pb.GetRequest) (*pb.GetResponse, error) {
+func (s *KVService) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, error) {
 	if req.GetKey() == "" {
 		return nil, status.Error(codes.InvalidArgument, "key is required")
+	}
+	if err := s.linearizableRead(ctx); err != nil {
+		return nil, err
 	}
 	res, err := s.machine.Get(req.GetKey())
 	if err != nil {
@@ -162,6 +165,14 @@ func (s *KVService) propose(ctx context.Context, cmd statemachine.Command) (stat
 		return s.proposeAndWaitApplied(ctx, cmd)
 	}
 	return s.proposeAndApplyReady(ctx, cmd)
+}
+
+func (s *KVService) linearizableRead(ctx context.Context) error {
+	if s.raft == nil {
+		return nil
+	}
+	_, err := s.propose(ctx, statemachine.Command{Type: statemachine.CmdBarrier})
+	return err
 }
 
 func (s *KVService) proposeAndWaitApplied(ctx context.Context, cmd statemachine.Command) (statemachine.Result, error) {

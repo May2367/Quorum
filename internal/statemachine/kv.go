@@ -17,6 +17,7 @@ const (
 	CmdPut CommandType = iota
 	CmdDelete
 	CmdCAS
+	CmdBarrier
 )
 
 type Command struct {
@@ -137,6 +138,8 @@ func (kv *KV) applyLocked(cmd Command) (Result, error) {
 			return Result{Value: cur.value, Revision: cur.revision}, ErrCompareFailed
 		}
 		return kv.putLocked(cmd.Key, cmd.Value, cmd.LogIndex), nil
+	case CmdBarrier:
+		return Result{Revision: kv.revision, Applied: true}, nil
 	default:
 		return Result{}, errors.New("unknown command type")
 	}

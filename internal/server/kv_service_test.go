@@ -217,3 +217,45 @@ func TestKVServiceRejectsFollowerWriteWithLeaderHint(t *testing.T) {
 		t.Fatalf("proposes = %d, want 0", rt.proposes)
 	}
 }
+
+func TestKVServiceRejectsFollowerReadWithLeaderHint(t *testing.T) {
+	rt := &statusRuntime{status: RaftStatus{ID: 1, Leader: 2, State: raft.Follower}}
+	svc := NewKVService(rt, statemachine.NewKV())
+	_, err := svc.Get(context.Background(), &pb.GetRequest{Key: "x"})
+	if status.Code(err) != codes.Unavailable {
+		t.Fatalf("get err = %v, want Unavailable", err)
+	}
+	if got := status.Convert(err).Message(); got != "not leader: leader_id=2" {
+		t.Fatalf("status message = %q, want leader hint", got)
+	}
+	if rt.proposes != 0 {
+		t.Fatalf("proposes = %d, want 0", rt.proposes)
+	}
+}
+
+func TestKVServiceGetUsesReadBarrier(t *testing.T) {
+	rt, err := OpenPersistentRaft(t.TempDir(), 1, []uint64{1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rt.Close()
+	rt.Node().SetElectionTimeout(1)
+	if _, err := rt.Tick(); err != nil {
+		t.Fatal(err)
+	}
+	svc := NewKVService(rt, statemachine.NewKV())
+	if _, err := svc.Put(context.Background(), &pb.PutRequest{Key: "x", Value: "1", ClientId: "c1", Sequence: 1}); err != nil {
+		t.Fatal(err)
+	}
+	before := rt.Node().LastIndex()
+	got, err := svc.Get(context.Background(), &pb.GetRequest{Key: "x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.GetValue() != "1" || got.GetRevision() != 1 {
+		t.Fatalf("get = %+v, want value 1 revision 1", got)
+	}
+	if after := rt.Node().LastIndex(); after != before+1 {
+		t.Fatalf("last index after read = %d, want %d", after, before+1)
+	}
+}

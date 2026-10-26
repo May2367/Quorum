@@ -177,4 +177,17 @@ func TestMultiNodeKVClientRedirectReplicatesWrite(t *testing.T) {
 		t.Fatalf("revision = %d, want 1", revision)
 	}
 	cluster.WaitValueOnAll(t, "jobs/42", "claimed")
+
+	reader := client.New(client.Config{
+		Endpoints:     []string{cluster.addrs[2]},
+		NodeEndpoints: cluster.addrs,
+		Timeout:       time.Second,
+	})
+	value, readRevision, err := reader.Get(context.Background(), "jobs/42")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value != "claimed" || readRevision != 1 {
+		t.Fatalf("get value=%q revision=%d, want claimed revision 1", value, readRevision)
+	}
 }
