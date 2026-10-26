@@ -37,6 +37,21 @@ type CASResult struct {
 	Revision uint64
 }
 
+type LockResult struct {
+	Name         string
+	Holder       string
+	FencingToken uint64
+	ExpiresAt    uint64
+	Acquired     bool
+}
+
+type TransferResult struct {
+	FromBalance int64
+	ToBalance   int64
+	Revision    uint64
+	Applied     bool
+}
+
 func New(cfg Config) *Client {
 	timeout := cfg.Timeout
 	if timeout == 0 {
@@ -107,7 +122,101 @@ func (c *Client) CompareAndSwap(ctx context.Context, key, expected, value, clien
 	return result, err
 }
 
+func (c *Client) AcquireLock(ctx context.Context, name, holder string, ttlTicks uint64) (LockResult, error) {
+	var result LockResult
+	err := c.withLockClient(ctx, func(ctx context.Context, lc pb.LockClient) error {
+		res, err := lc.Acquire(ctx, &pb.AcquireLockRequest{Name: name, Holder: holder, TtlTicks: ttlTicks})
+		if err != nil {
+			return err
+		}
+		result = lockResult(res)
+		return nil
+	})
+	return result, err
+}
+
+func (c *Client) KeepAliveLock(ctx context.Context, name, holder string, ttlTicks uint64) (LockResult, error) {
+	var result LockResult
+	err := c.withLockClient(ctx, func(ctx context.Context, lc pb.LockClient) error {
+		res, err := lc.KeepAlive(ctx, &pb.KeepAliveLockRequest{Name: name, Holder: holder, TtlTicks: ttlTicks})
+		if err != nil {
+			return err
+		}
+		result = lockResult(res)
+		return nil
+	})
+	return result, err
+}
+
+func (c *Client) ReleaseLock(ctx context.Context, name, holder string) error {
+	return c.withLockClient(ctx, func(ctx context.Context, lc pb.LockClient) error {
+		_, err := lc.Release(ctx, &pb.ReleaseLockRequest{Name: name, Holder: holder})
+		return err
+	})
+}
+
+func (c *Client) CreateAccount(ctx context.Context, accountID string, initialCents int64) error {
+	return c.withLedgerClient(ctx, func(ctx context.Context, lc pb.LedgerClient) error {
+		_, err := lc.CreateAccount(ctx, &pb.CreateAccountRequest{AccountId: accountID, InitialCents: initialCents})
+		return err
+	})
+}
+
+func (c *Client) Transfer(ctx context.Context, from, to string, cents int64, idempotencyKey string, fencingToken uint64) (TransferResult, error) {
+	var result TransferResult
+	err := c.withLedgerClient(ctx, func(ctx context.Context, lc pb.LedgerClient) error {
+		res, err := lc.Transfer(ctx, &pb.TransferRequest{FromAccount: from, ToAccount: to, Cents: cents, IdempotencyKey: idempotencyKey, FencingToken: fencingToken})
+		if err != nil {
+			return err
+		}
+		result = TransferResult{FromBalance: res.GetFromBalance(), ToBalance: res.GetToBalance(), Revision: res.GetRevision(), Applied: res.GetApplied()}
+		return nil
+	})
+	return result, err
+}
+
+func (c *Client) GetBalance(ctx context.Context, accountID string) (int64, error) {
+	var balance int64
+	err := c.withLedgerClient(ctx, func(ctx context.Context, lc pb.LedgerClient) error {
+		res, err := lc.GetBalance(ctx, &pb.GetBalanceRequest{AccountId: accountID})
+		if err != nil {
+			return err
+		}
+		balance = res.GetBalance()
+		return nil
+	})
+	return balance, err
+}
+
+func lockResult(res *pb.LockResponse) LockResult {
+	return LockResult{
+		Name:         res.GetName(),
+		Holder:       res.GetHolder(),
+		FencingToken: res.GetFencingToken(),
+		ExpiresAt:    res.GetExpiresAt(),
+		Acquired:     res.GetAcquired(),
+	}
+}
+
 func (c *Client) withClient(ctx context.Context, fn func(context.Context, pb.QuorumClient) error) error {
+	return c.withConn(ctx, func(ctx context.Context, conn *grpc.ClientConn) error {
+		return fn(ctx, pb.NewQuorumClient(conn))
+	})
+}
+
+func (c *Client) withLockClient(ctx context.Context, fn func(context.Context, pb.LockClient) error) error {
+	return c.withConn(ctx, func(ctx context.Context, conn *grpc.ClientConn) error {
+		return fn(ctx, pb.NewLockClient(conn))
+	})
+}
+
+func (c *Client) withLedgerClient(ctx context.Context, fn func(context.Context, pb.LedgerClient) error) error {
+	return c.withConn(ctx, func(ctx context.Context, conn *grpc.ClientConn) error {
+		return fn(ctx, pb.NewLedgerClient(conn))
+	})
+}
+
+func (c *Client) withConn(ctx context.Context, fn func(context.Context, *grpc.ClientConn) error) error {
 	queue := c.orderedEndpoints()
 	if len(queue) == 0 {
 		return errors.New("no endpoints configured")
@@ -133,7 +242,7 @@ func (c *Client) withClient(ctx context.Context, fn func(context.Context, pb.Quo
 			lastErr = err
 			continue
 		}
-		err = fn(callCtx, pb.NewQuorumClient(conn))
+		err = fn(callCtx, conn)
 		closeErr := conn.Close()
 		cancel()
 		if err == nil && closeErr == nil {

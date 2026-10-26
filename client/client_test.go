@@ -82,3 +82,89 @@ func serveTestQuorum(t *testing.T, svc pb.QuorumServer) (string, func()) {
 		_ = listener.Close()
 	}
 }
+
+type testLockServer struct {
+	pb.UnimplementedLockServer
+	acquire func(context.Context, *pb.AcquireLockRequest) (*pb.LockResponse, error)
+}
+
+func (s *testLockServer) Acquire(ctx context.Context, req *pb.AcquireLockRequest) (*pb.LockResponse, error) {
+	return s.acquire(ctx, req)
+}
+
+type testLedgerServer struct {
+	pb.UnimplementedLedgerServer
+	transfer func(context.Context, *pb.TransferRequest) (*pb.TransferResponse, error)
+}
+
+func (s *testLedgerServer) Transfer(ctx context.Context, req *pb.TransferRequest) (*pb.TransferResponse, error) {
+	return s.transfer(ctx, req)
+}
+
+func TestClientLockAndLedgerFollowLeaderRedirectHint(t *testing.T) {
+	followerLockAddr, closeFollowerLock := serveTestLock(t, &testLockServer{acquire: func(context.Context, *pb.AcquireLockRequest) (*pb.LockResponse, error) {
+		return nil, status.Error(codes.Unavailable, "not leader: leader_id=2")
+	}})
+	defer closeFollowerLock()
+	leaderLockAddr, closeLeaderLock := serveTestLock(t, &testLockServer{acquire: func(context.Context, *pb.AcquireLockRequest) (*pb.LockResponse, error) {
+		return &pb.LockResponse{Name: "job", Holder: "worker", FencingToken: 7, ExpiresAt: 5, Acquired: true}, nil
+	}})
+	defer closeLeaderLock()
+
+	c := New(Config{Endpoints: []string{followerLockAddr}, NodeEndpoints: map[uint64]string{2: leaderLockAddr}, Timeout: time.Second})
+	lock, err := c.AcquireLock(context.Background(), "job", "worker", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lock.FencingToken != 7 || !lock.Acquired {
+		t.Fatalf("lock = %+v, want token 7 acquired", lock)
+	}
+
+	followerLedgerAddr, closeFollowerLedger := serveTestLedger(t, &testLedgerServer{transfer: func(context.Context, *pb.TransferRequest) (*pb.TransferResponse, error) {
+		return nil, status.Error(codes.Unavailable, "not leader: leader_id=3")
+	}})
+	defer closeFollowerLedger()
+	leaderLedgerAddr, closeLeaderLedger := serveTestLedger(t, &testLedgerServer{transfer: func(context.Context, *pb.TransferRequest) (*pb.TransferResponse, error) {
+		return &pb.TransferResponse{FromBalance: 75, ToBalance: 25, Revision: 4, Applied: true}, nil
+	}})
+	defer closeLeaderLedger()
+
+	c = New(Config{Endpoints: []string{followerLedgerAddr}, NodeEndpoints: map[uint64]string{3: leaderLedgerAddr}, Timeout: time.Second})
+	transfer, err := c.Transfer(context.Background(), "escrow", "merchant", 25, "job-1", 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if transfer.FromBalance != 75 || transfer.ToBalance != 25 || !transfer.Applied {
+		t.Fatalf("transfer = %+v, want applied 75/25", transfer)
+	}
+}
+
+func serveTestLock(t *testing.T, svc pb.LockServer) (string, func()) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := grpc.NewServer()
+	pb.RegisterLockServer(server, svc)
+	go func() { _ = server.Serve(listener) }()
+	return listener.Addr().String(), func() {
+		server.Stop()
+		_ = listener.Close()
+	}
+}
+
+func serveTestLedger(t *testing.T, svc pb.LedgerServer) (string, func()) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := grpc.NewServer()
+	pb.RegisterLedgerServer(server, svc)
+	go func() { _ = server.Serve(listener) }()
+	return listener.Addr().String(), func() {
+		server.Stop()
+		_ = listener.Close()
+	}
+}

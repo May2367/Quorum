@@ -589,6 +589,610 @@ func (x *WatchEvent) GetDeleted() bool {
 	return false
 }
 
+type AcquireLockRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Holder        string                 `protobuf:"bytes,2,opt,name=holder,proto3" json:"holder,omitempty"`
+	TtlTicks      uint64                 `protobuf:"varint,3,opt,name=ttl_ticks,json=ttlTicks,proto3" json:"ttl_ticks,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AcquireLockRequest) Reset() {
+	*x = AcquireLockRequest{}
+	mi := &file_proto_quorum_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AcquireLockRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AcquireLockRequest) ProtoMessage() {}
+
+func (x *AcquireLockRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_quorum_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AcquireLockRequest.ProtoReflect.Descriptor instead.
+func (*AcquireLockRequest) Descriptor() ([]byte, []int) {
+	return file_proto_quorum_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *AcquireLockRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *AcquireLockRequest) GetHolder() string {
+	if x != nil {
+		return x.Holder
+	}
+	return ""
+}
+
+func (x *AcquireLockRequest) GetTtlTicks() uint64 {
+	if x != nil {
+		return x.TtlTicks
+	}
+	return 0
+}
+
+type KeepAliveLockRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Holder        string                 `protobuf:"bytes,2,opt,name=holder,proto3" json:"holder,omitempty"`
+	TtlTicks      uint64                 `protobuf:"varint,3,opt,name=ttl_ticks,json=ttlTicks,proto3" json:"ttl_ticks,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *KeepAliveLockRequest) Reset() {
+	*x = KeepAliveLockRequest{}
+	mi := &file_proto_quorum_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *KeepAliveLockRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*KeepAliveLockRequest) ProtoMessage() {}
+
+func (x *KeepAliveLockRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_quorum_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use KeepAliveLockRequest.ProtoReflect.Descriptor instead.
+func (*KeepAliveLockRequest) Descriptor() ([]byte, []int) {
+	return file_proto_quorum_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *KeepAliveLockRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *KeepAliveLockRequest) GetHolder() string {
+	if x != nil {
+		return x.Holder
+	}
+	return ""
+}
+
+func (x *KeepAliveLockRequest) GetTtlTicks() uint64 {
+	if x != nil {
+		return x.TtlTicks
+	}
+	return 0
+}
+
+type ReleaseLockRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Holder        string                 `protobuf:"bytes,2,opt,name=holder,proto3" json:"holder,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReleaseLockRequest) Reset() {
+	*x = ReleaseLockRequest{}
+	mi := &file_proto_quorum_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReleaseLockRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReleaseLockRequest) ProtoMessage() {}
+
+func (x *ReleaseLockRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_quorum_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReleaseLockRequest.ProtoReflect.Descriptor instead.
+func (*ReleaseLockRequest) Descriptor() ([]byte, []int) {
+	return file_proto_quorum_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ReleaseLockRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ReleaseLockRequest) GetHolder() string {
+	if x != nil {
+		return x.Holder
+	}
+	return ""
+}
+
+type LockResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Holder        string                 `protobuf:"bytes,2,opt,name=holder,proto3" json:"holder,omitempty"`
+	FencingToken  uint64                 `protobuf:"varint,3,opt,name=fencing_token,json=fencingToken,proto3" json:"fencing_token,omitempty"`
+	ExpiresAt     uint64                 `protobuf:"varint,4,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	Acquired      bool                   `protobuf:"varint,5,opt,name=acquired,proto3" json:"acquired,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LockResponse) Reset() {
+	*x = LockResponse{}
+	mi := &file_proto_quorum_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LockResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LockResponse) ProtoMessage() {}
+
+func (x *LockResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_quorum_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LockResponse.ProtoReflect.Descriptor instead.
+func (*LockResponse) Descriptor() ([]byte, []int) {
+	return file_proto_quorum_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *LockResponse) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *LockResponse) GetHolder() string {
+	if x != nil {
+		return x.Holder
+	}
+	return ""
+}
+
+func (x *LockResponse) GetFencingToken() uint64 {
+	if x != nil {
+		return x.FencingToken
+	}
+	return 0
+}
+
+func (x *LockResponse) GetExpiresAt() uint64 {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return 0
+}
+
+func (x *LockResponse) GetAcquired() bool {
+	if x != nil {
+		return x.Acquired
+	}
+	return false
+}
+
+type ReleaseLockResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReleaseLockResponse) Reset() {
+	*x = ReleaseLockResponse{}
+	mi := &file_proto_quorum_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReleaseLockResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReleaseLockResponse) ProtoMessage() {}
+
+func (x *ReleaseLockResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_quorum_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReleaseLockResponse.ProtoReflect.Descriptor instead.
+func (*ReleaseLockResponse) Descriptor() ([]byte, []int) {
+	return file_proto_quorum_proto_rawDescGZIP(), []int{14}
+}
+
+type CreateAccountRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AccountId     string                 `protobuf:"bytes,1,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
+	InitialCents  int64                  `protobuf:"varint,2,opt,name=initial_cents,json=initialCents,proto3" json:"initial_cents,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateAccountRequest) Reset() {
+	*x = CreateAccountRequest{}
+	mi := &file_proto_quorum_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateAccountRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateAccountRequest) ProtoMessage() {}
+
+func (x *CreateAccountRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_quorum_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateAccountRequest.ProtoReflect.Descriptor instead.
+func (*CreateAccountRequest) Descriptor() ([]byte, []int) {
+	return file_proto_quorum_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *CreateAccountRequest) GetAccountId() string {
+	if x != nil {
+		return x.AccountId
+	}
+	return ""
+}
+
+func (x *CreateAccountRequest) GetInitialCents() int64 {
+	if x != nil {
+		return x.InitialCents
+	}
+	return 0
+}
+
+type CreateAccountResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateAccountResponse) Reset() {
+	*x = CreateAccountResponse{}
+	mi := &file_proto_quorum_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateAccountResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateAccountResponse) ProtoMessage() {}
+
+func (x *CreateAccountResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_quorum_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateAccountResponse.ProtoReflect.Descriptor instead.
+func (*CreateAccountResponse) Descriptor() ([]byte, []int) {
+	return file_proto_quorum_proto_rawDescGZIP(), []int{16}
+}
+
+type TransferRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	FromAccount    string                 `protobuf:"bytes,1,opt,name=from_account,json=fromAccount,proto3" json:"from_account,omitempty"`
+	ToAccount      string                 `protobuf:"bytes,2,opt,name=to_account,json=toAccount,proto3" json:"to_account,omitempty"`
+	Cents          int64                  `protobuf:"varint,3,opt,name=cents,proto3" json:"cents,omitempty"`
+	IdempotencyKey string                 `protobuf:"bytes,4,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	FencingToken   uint64                 `protobuf:"varint,5,opt,name=fencing_token,json=fencingToken,proto3" json:"fencing_token,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *TransferRequest) Reset() {
+	*x = TransferRequest{}
+	mi := &file_proto_quorum_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TransferRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TransferRequest) ProtoMessage() {}
+
+func (x *TransferRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_quorum_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TransferRequest.ProtoReflect.Descriptor instead.
+func (*TransferRequest) Descriptor() ([]byte, []int) {
+	return file_proto_quorum_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *TransferRequest) GetFromAccount() string {
+	if x != nil {
+		return x.FromAccount
+	}
+	return ""
+}
+
+func (x *TransferRequest) GetToAccount() string {
+	if x != nil {
+		return x.ToAccount
+	}
+	return ""
+}
+
+func (x *TransferRequest) GetCents() int64 {
+	if x != nil {
+		return x.Cents
+	}
+	return 0
+}
+
+func (x *TransferRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *TransferRequest) GetFencingToken() uint64 {
+	if x != nil {
+		return x.FencingToken
+	}
+	return 0
+}
+
+type TransferResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FromBalance   int64                  `protobuf:"varint,1,opt,name=from_balance,json=fromBalance,proto3" json:"from_balance,omitempty"`
+	ToBalance     int64                  `protobuf:"varint,2,opt,name=to_balance,json=toBalance,proto3" json:"to_balance,omitempty"`
+	Revision      uint64                 `protobuf:"varint,3,opt,name=revision,proto3" json:"revision,omitempty"`
+	Applied       bool                   `protobuf:"varint,4,opt,name=applied,proto3" json:"applied,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TransferResponse) Reset() {
+	*x = TransferResponse{}
+	mi := &file_proto_quorum_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TransferResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TransferResponse) ProtoMessage() {}
+
+func (x *TransferResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_quorum_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TransferResponse.ProtoReflect.Descriptor instead.
+func (*TransferResponse) Descriptor() ([]byte, []int) {
+	return file_proto_quorum_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *TransferResponse) GetFromBalance() int64 {
+	if x != nil {
+		return x.FromBalance
+	}
+	return 0
+}
+
+func (x *TransferResponse) GetToBalance() int64 {
+	if x != nil {
+		return x.ToBalance
+	}
+	return 0
+}
+
+func (x *TransferResponse) GetRevision() uint64 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
+func (x *TransferResponse) GetApplied() bool {
+	if x != nil {
+		return x.Applied
+	}
+	return false
+}
+
+type GetBalanceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AccountId     string                 `protobuf:"bytes,1,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetBalanceRequest) Reset() {
+	*x = GetBalanceRequest{}
+	mi := &file_proto_quorum_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetBalanceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetBalanceRequest) ProtoMessage() {}
+
+func (x *GetBalanceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_quorum_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetBalanceRequest.ProtoReflect.Descriptor instead.
+func (*GetBalanceRequest) Descriptor() ([]byte, []int) {
+	return file_proto_quorum_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *GetBalanceRequest) GetAccountId() string {
+	if x != nil {
+		return x.AccountId
+	}
+	return ""
+}
+
+type GetBalanceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Balance       int64                  `protobuf:"varint,1,opt,name=balance,proto3" json:"balance,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetBalanceResponse) Reset() {
+	*x = GetBalanceResponse{}
+	mi := &file_proto_quorum_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetBalanceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetBalanceResponse) ProtoMessage() {}
+
+func (x *GetBalanceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_quorum_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetBalanceResponse.ProtoReflect.Descriptor instead.
+func (*GetBalanceResponse) Descriptor() ([]byte, []int) {
+	return file_proto_quorum_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *GetBalanceResponse) GetBalance() int64 {
+	if x != nil {
+		return x.Balance
+	}
+	return 0
+}
+
 type RaftEntry struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Index         uint64                 `protobuf:"varint,1,opt,name=index,proto3" json:"index,omitempty"`
@@ -600,7 +1204,7 @@ type RaftEntry struct {
 
 func (x *RaftEntry) Reset() {
 	*x = RaftEntry{}
-	mi := &file_proto_quorum_proto_msgTypes[10]
+	mi := &file_proto_quorum_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -612,7 +1216,7 @@ func (x *RaftEntry) String() string {
 func (*RaftEntry) ProtoMessage() {}
 
 func (x *RaftEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_quorum_proto_msgTypes[10]
+	mi := &file_proto_quorum_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -625,7 +1229,7 @@ func (x *RaftEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RaftEntry.ProtoReflect.Descriptor instead.
 func (*RaftEntry) Descriptor() ([]byte, []int) {
-	return file_proto_quorum_proto_rawDescGZIP(), []int{10}
+	return file_proto_quorum_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *RaftEntry) GetIndex() uint64 {
@@ -668,7 +1272,7 @@ type RaftMessage struct {
 
 func (x *RaftMessage) Reset() {
 	*x = RaftMessage{}
-	mi := &file_proto_quorum_proto_msgTypes[11]
+	mi := &file_proto_quorum_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -680,7 +1284,7 @@ func (x *RaftMessage) String() string {
 func (*RaftMessage) ProtoMessage() {}
 
 func (x *RaftMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_quorum_proto_msgTypes[11]
+	mi := &file_proto_quorum_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -693,7 +1297,7 @@ func (x *RaftMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RaftMessage.ProtoReflect.Descriptor instead.
 func (*RaftMessage) Descriptor() ([]byte, []int) {
-	return file_proto_quorum_proto_rawDescGZIP(), []int{11}
+	return file_proto_quorum_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *RaftMessage) GetType() uint32 {
@@ -782,7 +1386,7 @@ type RaftMessages struct {
 
 func (x *RaftMessages) Reset() {
 	*x = RaftMessages{}
-	mi := &file_proto_quorum_proto_msgTypes[12]
+	mi := &file_proto_quorum_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -794,7 +1398,7 @@ func (x *RaftMessages) String() string {
 func (*RaftMessages) ProtoMessage() {}
 
 func (x *RaftMessages) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_quorum_proto_msgTypes[12]
+	mi := &file_proto_quorum_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -807,7 +1411,7 @@ func (x *RaftMessages) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RaftMessages.ProtoReflect.Descriptor instead.
 func (*RaftMessages) Descriptor() ([]byte, []int) {
-	return file_proto_quorum_proto_rawDescGZIP(), []int{12}
+	return file_proto_quorum_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *RaftMessages) GetMessages() []*RaftMessage {
@@ -860,7 +1464,49 @@ const file_proto_quorum_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value\x12\x1a\n" +
 	"\brevision\x18\x03 \x01(\x04R\brevision\x12\x18\n" +
-	"\adeleted\x18\x04 \x01(\bR\adeleted\"I\n" +
+	"\adeleted\x18\x04 \x01(\bR\adeleted\"]\n" +
+	"\x12AcquireLockRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
+	"\x06holder\x18\x02 \x01(\tR\x06holder\x12\x1b\n" +
+	"\tttl_ticks\x18\x03 \x01(\x04R\bttlTicks\"_\n" +
+	"\x14KeepAliveLockRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
+	"\x06holder\x18\x02 \x01(\tR\x06holder\x12\x1b\n" +
+	"\tttl_ticks\x18\x03 \x01(\x04R\bttlTicks\"@\n" +
+	"\x12ReleaseLockRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
+	"\x06holder\x18\x02 \x01(\tR\x06holder\"\x9a\x01\n" +
+	"\fLockResponse\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
+	"\x06holder\x18\x02 \x01(\tR\x06holder\x12#\n" +
+	"\rfencing_token\x18\x03 \x01(\x04R\ffencingToken\x12\x1d\n" +
+	"\n" +
+	"expires_at\x18\x04 \x01(\x04R\texpiresAt\x12\x1a\n" +
+	"\bacquired\x18\x05 \x01(\bR\bacquired\"\x15\n" +
+	"\x13ReleaseLockResponse\"Z\n" +
+	"\x14CreateAccountRequest\x12\x1d\n" +
+	"\n" +
+	"account_id\x18\x01 \x01(\tR\taccountId\x12#\n" +
+	"\rinitial_cents\x18\x02 \x01(\x03R\finitialCents\"\x17\n" +
+	"\x15CreateAccountResponse\"\xb7\x01\n" +
+	"\x0fTransferRequest\x12!\n" +
+	"\ffrom_account\x18\x01 \x01(\tR\vfromAccount\x12\x1d\n" +
+	"\n" +
+	"to_account\x18\x02 \x01(\tR\ttoAccount\x12\x14\n" +
+	"\x05cents\x18\x03 \x01(\x03R\x05cents\x12'\n" +
+	"\x0fidempotency_key\x18\x04 \x01(\tR\x0eidempotencyKey\x12#\n" +
+	"\rfencing_token\x18\x05 \x01(\x04R\ffencingToken\"\x8a\x01\n" +
+	"\x10TransferResponse\x12!\n" +
+	"\ffrom_balance\x18\x01 \x01(\x03R\vfromBalance\x12\x1d\n" +
+	"\n" +
+	"to_balance\x18\x02 \x01(\x03R\ttoBalance\x12\x1a\n" +
+	"\brevision\x18\x03 \x01(\x04R\brevision\x12\x18\n" +
+	"\aapplied\x18\x04 \x01(\bR\aapplied\"2\n" +
+	"\x11GetBalanceRequest\x12\x1d\n" +
+	"\n" +
+	"account_id\x18\x01 \x01(\tR\taccountId\".\n" +
+	"\x12GetBalanceResponse\x12\x18\n" +
+	"\abalance\x18\x01 \x01(\x03R\abalance\"I\n" +
 	"\tRaftEntry\x12\x14\n" +
 	"\x05index\x18\x01 \x01(\x04R\x05index\x12\x12\n" +
 	"\x04term\x18\x02 \x01(\x04R\x04term\x12\x12\n" +
@@ -886,7 +1532,16 @@ const file_proto_quorum_proto_rawDesc = "" +
 	"\x03Put\x12\x15.quorum.v1.PutRequest\x1a\x16.quorum.v1.PutResponse\x12=\n" +
 	"\x06Delete\x12\x18.quorum.v1.DeleteRequest\x1a\x19.quorum.v1.DeleteResponse\x12U\n" +
 	"\x0eCompareAndSwap\x12 .quorum.v1.CompareAndSwapRequest\x1a!.quorum.v1.CompareAndSwapResponse\x129\n" +
-	"\x05Watch\x12\x17.quorum.v1.WatchRequest\x1a\x15.quorum.v1.WatchEvent0\x012C\n" +
+	"\x05Watch\x12\x17.quorum.v1.WatchRequest\x1a\x15.quorum.v1.WatchEvent0\x012\xda\x01\n" +
+	"\x04Lock\x12A\n" +
+	"\aAcquire\x12\x1d.quorum.v1.AcquireLockRequest\x1a\x17.quorum.v1.LockResponse\x12E\n" +
+	"\tKeepAlive\x12\x1f.quorum.v1.KeepAliveLockRequest\x1a\x17.quorum.v1.LockResponse\x12H\n" +
+	"\aRelease\x12\x1d.quorum.v1.ReleaseLockRequest\x1a\x1e.quorum.v1.ReleaseLockResponse2\xec\x01\n" +
+	"\x06Ledger\x12R\n" +
+	"\rCreateAccount\x12\x1f.quorum.v1.CreateAccountRequest\x1a .quorum.v1.CreateAccountResponse\x12C\n" +
+	"\bTransfer\x12\x1a.quorum.v1.TransferRequest\x1a\x1b.quorum.v1.TransferResponse\x12I\n" +
+	"\n" +
+	"GetBalance\x12\x1c.quorum.v1.GetBalanceRequest\x1a\x1d.quorum.v1.GetBalanceResponse2C\n" +
 	"\bRaftPeer\x127\n" +
 	"\x04Send\x12\x16.quorum.v1.RaftMessage\x1a\x17.quorum.v1.RaftMessagesB\x14Z\x12quorum/proto;protob\x06proto3"
 
@@ -902,7 +1557,7 @@ func file_proto_quorum_proto_rawDescGZIP() []byte {
 	return file_proto_quorum_proto_rawDescData
 }
 
-var file_proto_quorum_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_proto_quorum_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_proto_quorum_proto_goTypes = []any{
 	(*GetRequest)(nil),             // 0: quorum.v1.GetRequest
 	(*GetResponse)(nil),            // 1: quorum.v1.GetResponse
@@ -914,27 +1569,50 @@ var file_proto_quorum_proto_goTypes = []any{
 	(*CompareAndSwapResponse)(nil), // 7: quorum.v1.CompareAndSwapResponse
 	(*WatchRequest)(nil),           // 8: quorum.v1.WatchRequest
 	(*WatchEvent)(nil),             // 9: quorum.v1.WatchEvent
-	(*RaftEntry)(nil),              // 10: quorum.v1.RaftEntry
-	(*RaftMessage)(nil),            // 11: quorum.v1.RaftMessage
-	(*RaftMessages)(nil),           // 12: quorum.v1.RaftMessages
+	(*AcquireLockRequest)(nil),     // 10: quorum.v1.AcquireLockRequest
+	(*KeepAliveLockRequest)(nil),   // 11: quorum.v1.KeepAliveLockRequest
+	(*ReleaseLockRequest)(nil),     // 12: quorum.v1.ReleaseLockRequest
+	(*LockResponse)(nil),           // 13: quorum.v1.LockResponse
+	(*ReleaseLockResponse)(nil),    // 14: quorum.v1.ReleaseLockResponse
+	(*CreateAccountRequest)(nil),   // 15: quorum.v1.CreateAccountRequest
+	(*CreateAccountResponse)(nil),  // 16: quorum.v1.CreateAccountResponse
+	(*TransferRequest)(nil),        // 17: quorum.v1.TransferRequest
+	(*TransferResponse)(nil),       // 18: quorum.v1.TransferResponse
+	(*GetBalanceRequest)(nil),      // 19: quorum.v1.GetBalanceRequest
+	(*GetBalanceResponse)(nil),     // 20: quorum.v1.GetBalanceResponse
+	(*RaftEntry)(nil),              // 21: quorum.v1.RaftEntry
+	(*RaftMessage)(nil),            // 22: quorum.v1.RaftMessage
+	(*RaftMessages)(nil),           // 23: quorum.v1.RaftMessages
 }
 var file_proto_quorum_proto_depIdxs = []int32{
-	10, // 0: quorum.v1.RaftMessage.entries:type_name -> quorum.v1.RaftEntry
-	11, // 1: quorum.v1.RaftMessages.messages:type_name -> quorum.v1.RaftMessage
+	21, // 0: quorum.v1.RaftMessage.entries:type_name -> quorum.v1.RaftEntry
+	22, // 1: quorum.v1.RaftMessages.messages:type_name -> quorum.v1.RaftMessage
 	0,  // 2: quorum.v1.Quorum.Get:input_type -> quorum.v1.GetRequest
 	2,  // 3: quorum.v1.Quorum.Put:input_type -> quorum.v1.PutRequest
 	4,  // 4: quorum.v1.Quorum.Delete:input_type -> quorum.v1.DeleteRequest
 	6,  // 5: quorum.v1.Quorum.CompareAndSwap:input_type -> quorum.v1.CompareAndSwapRequest
 	8,  // 6: quorum.v1.Quorum.Watch:input_type -> quorum.v1.WatchRequest
-	11, // 7: quorum.v1.RaftPeer.Send:input_type -> quorum.v1.RaftMessage
-	1,  // 8: quorum.v1.Quorum.Get:output_type -> quorum.v1.GetResponse
-	3,  // 9: quorum.v1.Quorum.Put:output_type -> quorum.v1.PutResponse
-	5,  // 10: quorum.v1.Quorum.Delete:output_type -> quorum.v1.DeleteResponse
-	7,  // 11: quorum.v1.Quorum.CompareAndSwap:output_type -> quorum.v1.CompareAndSwapResponse
-	9,  // 12: quorum.v1.Quorum.Watch:output_type -> quorum.v1.WatchEvent
-	12, // 13: quorum.v1.RaftPeer.Send:output_type -> quorum.v1.RaftMessages
-	8,  // [8:14] is the sub-list for method output_type
-	2,  // [2:8] is the sub-list for method input_type
+	10, // 7: quorum.v1.Lock.Acquire:input_type -> quorum.v1.AcquireLockRequest
+	11, // 8: quorum.v1.Lock.KeepAlive:input_type -> quorum.v1.KeepAliveLockRequest
+	12, // 9: quorum.v1.Lock.Release:input_type -> quorum.v1.ReleaseLockRequest
+	15, // 10: quorum.v1.Ledger.CreateAccount:input_type -> quorum.v1.CreateAccountRequest
+	17, // 11: quorum.v1.Ledger.Transfer:input_type -> quorum.v1.TransferRequest
+	19, // 12: quorum.v1.Ledger.GetBalance:input_type -> quorum.v1.GetBalanceRequest
+	22, // 13: quorum.v1.RaftPeer.Send:input_type -> quorum.v1.RaftMessage
+	1,  // 14: quorum.v1.Quorum.Get:output_type -> quorum.v1.GetResponse
+	3,  // 15: quorum.v1.Quorum.Put:output_type -> quorum.v1.PutResponse
+	5,  // 16: quorum.v1.Quorum.Delete:output_type -> quorum.v1.DeleteResponse
+	7,  // 17: quorum.v1.Quorum.CompareAndSwap:output_type -> quorum.v1.CompareAndSwapResponse
+	9,  // 18: quorum.v1.Quorum.Watch:output_type -> quorum.v1.WatchEvent
+	13, // 19: quorum.v1.Lock.Acquire:output_type -> quorum.v1.LockResponse
+	13, // 20: quorum.v1.Lock.KeepAlive:output_type -> quorum.v1.LockResponse
+	14, // 21: quorum.v1.Lock.Release:output_type -> quorum.v1.ReleaseLockResponse
+	16, // 22: quorum.v1.Ledger.CreateAccount:output_type -> quorum.v1.CreateAccountResponse
+	18, // 23: quorum.v1.Ledger.Transfer:output_type -> quorum.v1.TransferResponse
+	20, // 24: quorum.v1.Ledger.GetBalance:output_type -> quorum.v1.GetBalanceResponse
+	23, // 25: quorum.v1.RaftPeer.Send:output_type -> quorum.v1.RaftMessages
+	14, // [14:26] is the sub-list for method output_type
+	2,  // [2:14] is the sub-list for method input_type
 	2,  // [2:2] is the sub-list for extension type_name
 	2,  // [2:2] is the sub-list for extension extendee
 	0,  // [0:2] is the sub-list for field type_name
@@ -951,9 +1629,9 @@ func file_proto_quorum_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_quorum_proto_rawDesc), len(file_proto_quorum_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   24,
 			NumExtensions: 0,
-			NumServices:   2,
+			NumServices:   4,
 		},
 		GoTypes:           file_proto_quorum_proto_goTypes,
 		DependencyIndexes: file_proto_quorum_proto_depIdxs,

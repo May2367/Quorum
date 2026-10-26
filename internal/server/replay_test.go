@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"quorum/internal/raft"
 	"quorum/internal/statemachine"
 )
 
@@ -139,5 +140,58 @@ func TestReplayCommittedLogToleratesCommittedCompareFailure(t *testing.T) {
 	}
 	if got.Value != "current" || got.Revision != 1 {
 		t.Fatalf("replayed value = %+v, want current revision 1", got)
+	}
+}
+
+func TestReplayCommittedEntriesRestoresLockAndLedgerState(t *testing.T) {
+	dir := t.TempDir()
+	rt, err := OpenPersistentRaft(dir, 1, []uint64{1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rt.Node().SetElectionTimeout(1)
+	if _, err := rt.Tick(); err != nil {
+		t.Fatal(err)
+	}
+	lockSvc := NewLockService(rt, statemachine.NewLockTable())
+	ledgerSvc := NewLedgerService(rt, statemachine.NewLedger())
+	lock, err := lockSvc.Acquire(context.Background(), "settlement/job-1", "worker-1", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ledgerSvc.CreateAccount(context.Background(), "escrow", 500); err != nil {
+		t.Fatal(err)
+	}
+	if err := ledgerSvc.CreateAccount(context.Background(), "merchant", 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ledgerSvc.Transfer(context.Background(), "escrow", "merchant", 125, "job-1", lock.FencingToken); err != nil {
+		t.Fatal(err)
+	}
+	if err := rt.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	replayedLocks := statemachine.NewLockTable()
+	replayedLedger := statemachine.NewLedger()
+	replayedLockSvc := NewLockService(nil, replayedLocks)
+	replayedLedgerSvc := NewLedgerService(nil, replayedLedger)
+	if err := ReplayCommittedEntries(dir, func(ent raft.Entry) error {
+		replayedLockSvc.ApplyCommitted([]raft.Entry{ent})
+		replayedLedgerSvc.ApplyCommitted([]raft.Entry{ent})
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	gotLock, held := replayedLocks.Get("settlement/job-1")
+	if !held || gotLock.Holder != "worker-1" || gotLock.FencingToken != lock.FencingToken {
+		t.Fatalf("replayed lock = %+v held=%t, want worker token %d", gotLock, held, lock.FencingToken)
+	}
+	balance, err := replayedLedger.GetBalance("escrow")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if balance != 375 {
+		t.Fatalf("replayed escrow balance = %d, want 375", balance)
 	}
 }

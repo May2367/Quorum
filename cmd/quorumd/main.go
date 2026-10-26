@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"quorum/internal/raft"
 	"quorum/internal/server"
 	"quorum/internal/statemachine"
 	"quorum/internal/transport"
@@ -46,16 +47,30 @@ func main() {
 		asyncOpts.ElectionTimeout = 1
 	}
 	machine := statemachine.NewKV()
-	if err := server.ReplayCommittedLog(cfg.DataDir, machine); err != nil {
+	locks := statemachine.NewLockTable()
+	ledger := statemachine.NewLedger()
+	kvService := server.NewKVService(nil, machine)
+	lockService := server.NewLockService(nil, locks)
+	ledgerService := server.NewLedgerService(nil, ledger)
+	applyCommitted := func(entries []raft.Entry) {
+		kvService.ApplyCommitted(entries)
+		lockService.ApplyCommitted(entries)
+		ledgerService.ApplyCommitted(entries)
+	}
+	if err := server.ReplayCommittedEntries(cfg.DataDir, func(ent raft.Entry) error {
+		applyCommitted([]raft.Entry{ent})
+		return nil
+	}); err != nil {
 		log.Fatalf("replay committed log: %v", err)
 	}
-	kvService := server.NewKVService(nil, machine)
-	asyncOpts.Apply = kvService.ApplyCommitted
+	asyncOpts.Apply = applyCommitted
 	raftNode, err := server.OpenAsyncRaft(cfg.DataDir, cfg.NodeID, peers.IDs, asyncOpts)
 	if err != nil {
 		log.Fatalf("open raft runtime: %v", err)
 	}
 	kvService.SetRaftRuntime(raftNode)
+	lockService.SetRaftRuntime(raftNode)
+	ledgerService.SetRaftRuntime(raftNode)
 	defer func() {
 		if err := raftNode.Close(); err != nil {
 			log.Printf("close raft runtime: %v", err)
@@ -69,6 +84,8 @@ func main() {
 
 	clientGRPCServer := grpc.NewServer()
 	pb.RegisterQuorumServer(clientGRPCServer, kvService)
+	pb.RegisterLockServer(clientGRPCServer, server.NewLockRPCServer(lockService))
+	pb.RegisterLedgerServer(clientGRPCServer, server.NewLedgerRPCServer(ledgerService))
 	clientListener, err := net.Listen("tcp", cfg.ClientAddr)
 	if err != nil {
 		log.Fatalf("listen client grpc: %v", err)

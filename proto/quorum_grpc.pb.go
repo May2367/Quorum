@@ -277,6 +277,362 @@ var Quorum_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	Lock_Acquire_FullMethodName   = "/quorum.v1.Lock/Acquire"
+	Lock_KeepAlive_FullMethodName = "/quorum.v1.Lock/KeepAlive"
+	Lock_Release_FullMethodName   = "/quorum.v1.Lock/Release"
+)
+
+// LockClient is the client API for Lock service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type LockClient interface {
+	Acquire(ctx context.Context, in *AcquireLockRequest, opts ...grpc.CallOption) (*LockResponse, error)
+	KeepAlive(ctx context.Context, in *KeepAliveLockRequest, opts ...grpc.CallOption) (*LockResponse, error)
+	Release(ctx context.Context, in *ReleaseLockRequest, opts ...grpc.CallOption) (*ReleaseLockResponse, error)
+}
+
+type lockClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewLockClient(cc grpc.ClientConnInterface) LockClient {
+	return &lockClient{cc}
+}
+
+func (c *lockClient) Acquire(ctx context.Context, in *AcquireLockRequest, opts ...grpc.CallOption) (*LockResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LockResponse)
+	err := c.cc.Invoke(ctx, Lock_Acquire_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *lockClient) KeepAlive(ctx context.Context, in *KeepAliveLockRequest, opts ...grpc.CallOption) (*LockResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LockResponse)
+	err := c.cc.Invoke(ctx, Lock_KeepAlive_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *lockClient) Release(ctx context.Context, in *ReleaseLockRequest, opts ...grpc.CallOption) (*ReleaseLockResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReleaseLockResponse)
+	err := c.cc.Invoke(ctx, Lock_Release_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// LockServer is the server API for Lock service.
+// All implementations must embed UnimplementedLockServer
+// for forward compatibility.
+type LockServer interface {
+	Acquire(context.Context, *AcquireLockRequest) (*LockResponse, error)
+	KeepAlive(context.Context, *KeepAliveLockRequest) (*LockResponse, error)
+	Release(context.Context, *ReleaseLockRequest) (*ReleaseLockResponse, error)
+	mustEmbedUnimplementedLockServer()
+}
+
+// UnimplementedLockServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedLockServer struct{}
+
+func (UnimplementedLockServer) Acquire(context.Context, *AcquireLockRequest) (*LockResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Acquire not implemented")
+}
+func (UnimplementedLockServer) KeepAlive(context.Context, *KeepAliveLockRequest) (*LockResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method KeepAlive not implemented")
+}
+func (UnimplementedLockServer) Release(context.Context, *ReleaseLockRequest) (*ReleaseLockResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Release not implemented")
+}
+func (UnimplementedLockServer) mustEmbedUnimplementedLockServer() {}
+func (UnimplementedLockServer) testEmbeddedByValue()              {}
+
+// UnsafeLockServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to LockServer will
+// result in compilation errors.
+type UnsafeLockServer interface {
+	mustEmbedUnimplementedLockServer()
+}
+
+func RegisterLockServer(s grpc.ServiceRegistrar, srv LockServer) {
+	// If the following call panics, it indicates UnimplementedLockServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&Lock_ServiceDesc, srv)
+}
+
+func _Lock_Acquire_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AcquireLockRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LockServer).Acquire(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Lock_Acquire_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LockServer).Acquire(ctx, req.(*AcquireLockRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Lock_KeepAlive_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(KeepAliveLockRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LockServer).KeepAlive(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Lock_KeepAlive_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LockServer).KeepAlive(ctx, req.(*KeepAliveLockRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Lock_Release_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReleaseLockRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LockServer).Release(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Lock_Release_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LockServer).Release(ctx, req.(*ReleaseLockRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// Lock_ServiceDesc is the grpc.ServiceDesc for Lock service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var Lock_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "quorum.v1.Lock",
+	HandlerType: (*LockServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Acquire",
+			Handler:    _Lock_Acquire_Handler,
+		},
+		{
+			MethodName: "KeepAlive",
+			Handler:    _Lock_KeepAlive_Handler,
+		},
+		{
+			MethodName: "Release",
+			Handler:    _Lock_Release_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "proto/quorum.proto",
+}
+
+const (
+	Ledger_CreateAccount_FullMethodName = "/quorum.v1.Ledger/CreateAccount"
+	Ledger_Transfer_FullMethodName      = "/quorum.v1.Ledger/Transfer"
+	Ledger_GetBalance_FullMethodName    = "/quorum.v1.Ledger/GetBalance"
+)
+
+// LedgerClient is the client API for Ledger service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type LedgerClient interface {
+	CreateAccount(ctx context.Context, in *CreateAccountRequest, opts ...grpc.CallOption) (*CreateAccountResponse, error)
+	Transfer(ctx context.Context, in *TransferRequest, opts ...grpc.CallOption) (*TransferResponse, error)
+	GetBalance(ctx context.Context, in *GetBalanceRequest, opts ...grpc.CallOption) (*GetBalanceResponse, error)
+}
+
+type ledgerClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewLedgerClient(cc grpc.ClientConnInterface) LedgerClient {
+	return &ledgerClient{cc}
+}
+
+func (c *ledgerClient) CreateAccount(ctx context.Context, in *CreateAccountRequest, opts ...grpc.CallOption) (*CreateAccountResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateAccountResponse)
+	err := c.cc.Invoke(ctx, Ledger_CreateAccount_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *ledgerClient) Transfer(ctx context.Context, in *TransferRequest, opts ...grpc.CallOption) (*TransferResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TransferResponse)
+	err := c.cc.Invoke(ctx, Ledger_Transfer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *ledgerClient) GetBalance(ctx context.Context, in *GetBalanceRequest, opts ...grpc.CallOption) (*GetBalanceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetBalanceResponse)
+	err := c.cc.Invoke(ctx, Ledger_GetBalance_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// LedgerServer is the server API for Ledger service.
+// All implementations must embed UnimplementedLedgerServer
+// for forward compatibility.
+type LedgerServer interface {
+	CreateAccount(context.Context, *CreateAccountRequest) (*CreateAccountResponse, error)
+	Transfer(context.Context, *TransferRequest) (*TransferResponse, error)
+	GetBalance(context.Context, *GetBalanceRequest) (*GetBalanceResponse, error)
+	mustEmbedUnimplementedLedgerServer()
+}
+
+// UnimplementedLedgerServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedLedgerServer struct{}
+
+func (UnimplementedLedgerServer) CreateAccount(context.Context, *CreateAccountRequest) (*CreateAccountResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateAccount not implemented")
+}
+func (UnimplementedLedgerServer) Transfer(context.Context, *TransferRequest) (*TransferResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Transfer not implemented")
+}
+func (UnimplementedLedgerServer) GetBalance(context.Context, *GetBalanceRequest) (*GetBalanceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetBalance not implemented")
+}
+func (UnimplementedLedgerServer) mustEmbedUnimplementedLedgerServer() {}
+func (UnimplementedLedgerServer) testEmbeddedByValue()                {}
+
+// UnsafeLedgerServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to LedgerServer will
+// result in compilation errors.
+type UnsafeLedgerServer interface {
+	mustEmbedUnimplementedLedgerServer()
+}
+
+func RegisterLedgerServer(s grpc.ServiceRegistrar, srv LedgerServer) {
+	// If the following call panics, it indicates UnimplementedLedgerServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&Ledger_ServiceDesc, srv)
+}
+
+func _Ledger_CreateAccount_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateAccountRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LedgerServer).CreateAccount(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Ledger_CreateAccount_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LedgerServer).CreateAccount(ctx, req.(*CreateAccountRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Ledger_Transfer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TransferRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LedgerServer).Transfer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Ledger_Transfer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LedgerServer).Transfer(ctx, req.(*TransferRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Ledger_GetBalance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBalanceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LedgerServer).GetBalance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Ledger_GetBalance_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LedgerServer).GetBalance(ctx, req.(*GetBalanceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// Ledger_ServiceDesc is the grpc.ServiceDesc for Ledger service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var Ledger_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "quorum.v1.Ledger",
+	HandlerType: (*LedgerServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "CreateAccount",
+			Handler:    _Ledger_CreateAccount_Handler,
+		},
+		{
+			MethodName: "Transfer",
+			Handler:    _Ledger_Transfer_Handler,
+		},
+		{
+			MethodName: "GetBalance",
+			Handler:    _Ledger_GetBalance_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "proto/quorum.proto",
+}
+
+const (
 	RaftPeer_Send_FullMethodName = "/quorum.v1.RaftPeer/Send"
 )
 

@@ -12,6 +12,18 @@ service Quorum {
   rpc Watch(WatchRequest) returns (stream WatchEvent);
 }
 
+service Lock {
+  rpc Acquire(AcquireLockRequest) returns (LockResponse);
+  rpc KeepAlive(KeepAliveLockRequest) returns (LockResponse);
+  rpc Release(ReleaseLockRequest) returns (ReleaseLockResponse);
+}
+
+service Ledger {
+  rpc CreateAccount(CreateAccountRequest) returns (CreateAccountResponse);
+  rpc Transfer(TransferRequest) returns (TransferResponse);
+  rpc GetBalance(GetBalanceRequest) returns (GetBalanceResponse);
+}
+
 service RaftPeer {
   rpc Send(RaftMessage) returns (RaftMessages);
 }
@@ -70,6 +82,63 @@ message WatchEvent {
   string value = 2;
   uint64 revision = 3;
   bool deleted = 4;
+}
+
+message AcquireLockRequest {
+  string name = 1;
+  string holder = 2;
+  uint64 ttl_ticks = 3;
+}
+
+message KeepAliveLockRequest {
+  string name = 1;
+  string holder = 2;
+  uint64 ttl_ticks = 3;
+}
+
+message ReleaseLockRequest {
+  string name = 1;
+  string holder = 2;
+}
+
+message LockResponse {
+  string name = 1;
+  string holder = 2;
+  uint64 fencing_token = 3;
+  uint64 expires_at = 4;
+  bool acquired = 5;
+}
+
+message ReleaseLockResponse {}
+
+message CreateAccountRequest {
+  string account_id = 1;
+  int64 initial_cents = 2;
+}
+
+message CreateAccountResponse {}
+
+message TransferRequest {
+  string from_account = 1;
+  string to_account = 2;
+  int64 cents = 3;
+  string idempotency_key = 4;
+  uint64 fencing_token = 5;
+}
+
+message TransferResponse {
+  int64 from_balance = 1;
+  int64 to_balance = 2;
+  uint64 revision = 3;
+  bool applied = 4;
+}
+
+message GetBalanceRequest {
+  string account_id = 1;
+}
+
+message GetBalanceResponse {
+  int64 balance = 1;
 }
 
 message RaftEntry {
