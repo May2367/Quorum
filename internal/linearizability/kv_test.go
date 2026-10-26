@@ -24,3 +24,23 @@ func TestCheckKVRejectsImpossibleHistory(t *testing.T) {
 		t.Fatal("expected impossible history to be rejected")
 	}
 }
+
+func TestCheckKVAcceptsOverlappingHistoryWithAlternateOrder(t *testing.T) {
+	ops := []Operation{
+		{ID: 1, Start: 1, End: 10, Kind: OpPut, Key: "x", Value: "1", OK: true, Revision: 1},
+		{ID: 2, Start: 2, End: 3, Kind: OpGet, Key: "x", OK: false, Err: "NotFound"},
+	}
+	if err := CheckKV(ops); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCheckKVRejectsRealTimeOrderViolation(t *testing.T) {
+	ops := []Operation{
+		{ID: 1, Start: 1, End: 2, Kind: OpPut, Key: "x", Value: "1", OK: true, Revision: 1},
+		{ID: 2, Start: 3, End: 4, Kind: OpGet, Key: "x", OK: false, Err: "NotFound"},
+	}
+	if err := CheckKV(ops); err == nil {
+		t.Fatal("expected real-time order violation to be rejected")
+	}
+}
