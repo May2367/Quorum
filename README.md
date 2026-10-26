@@ -69,7 +69,7 @@ Example result table:
 | target | transfers | concurrency | throughput ops/sec | p50 ms | p99 ms |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | local single-node | 200 | 10 | 209.50 | 45.56 | 92.53 |
-| local three-process | TBD | TBD | TBD | TBD | TBD |
+| local three-process | 200 | 10 | 66.42 | 149.62 | 214.21 |
 | Docker three-node | needs Docker-capable environment | | | | |
 
 ## Run The Single-Node Server
