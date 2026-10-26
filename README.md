@@ -1,19 +1,36 @@
 # Quorum
 
-Quorum is a Raft-based coordination service project outlined in `plan.txt`.
-The target system is a replicated key-value store with CAS, leases, fencing
-tokens, watches, a job-scheduler workload, a booking stress test, Docker chaos
-tests, and AWS deployment.
+Quorum is a Raft-based coordination service in Go. The core project is a replicated key-value store with WAL persistence, CAS, sessions, watches, and a path toward leases and fencing tokens. The flagship workload is a small settlement ledger that makes the distributed-systems guarantees concrete: workers settle idempotent money-movement jobs while duplicate retries and stale fencing tokens are rejected.
 
-This repository currently contains the first working foundation:
+This is an undergraduate resume project, so the repository favors a clear end-to-end story over production breadth. The current code is a foundation plus a working settlement workload; the multi-node server, full lease API, Porcupine checks, and AWS deployment remain roadmap items.
 
-- `internal/raft`: pure Raft state machine with election and replication tests.
-- `internal/storage`: append-only WAL with CRC and torn-write recovery.
-- `internal/statemachine`: KV apply layer with CAS, session dedup, revisions, and watch events.
-- `internal/server`: health and readiness endpoints.
-- `cmd/quorumd`, `cmd/quorumctl`, `cmd/scheduler-demo`, `cmd/booking-test`: executable entry points.
-- `deploy/docker`: initial multi-stage container and three-node compose file.
-- `proto/quorum.proto`: intended external API contract.
+## What Works Now
+
+- `internal/raft`: pure Raft state machine with leader election, replication flow, quorum commit, and tests.
+- `internal/storage`: append-only WAL with CRC records, fsync, torn-write recovery, and Raft hard-state/log recovery.
+- `internal/statemachine`: KV state machine with CAS, session dedup, revisions, watches, plus a settlement ledger with idempotency and fencing-token checks.
+- `internal/server`: single-node persistent Raft runtime, committed-log replay, health/readiness endpoints, and KV gRPC handlers.
+- `internal/transport`: protobuf conversion plus basic gRPC peer client/server primitives.
+- `cmd/quorumctl`: basic KV client CLI.
+- `cmd/scheduler-demo`: settlement workload demo with 20 workers and 500 jobs.
+- `deploy/docker`, `deploy/terraform`, `test/chaos`, `test/linearizability`: scaffolding for the later deployment and verification story.
+
+## Settlement Demo
+
+The demo creates one escrow account, 20 merchant accounts, and 500 settlement jobs. Workers apply ledger transfers using each job ID as the idempotency key. Every worker intentionally retries the same transfer once, and the ledger rejects the duplicate. A separate stale-token path demonstrates that older fencing tokens cannot mutate the guarded ledger resource.
+
+```sh
+go run ./cmd/scheduler-demo
+```
+
+Expected shape of the output:
+
+```text
+settlement jobs=500 workers=20
+completed_once=500 duplicate_retries_rejected=500 stale_fencing_rejected=true
+total_cents=50200 expected_total_cents=50200 no_negative_balances=true
+escrow_balance=0 transfers_recorded=501 revision=524
+```
 
 ## Verify
 
@@ -22,19 +39,30 @@ go test ./...
 go test -race ./...
 ```
 
-## Run the Server Stub
+## Run The Single-Node Server
 
 ```sh
-go run ./cmd/quorumd -node-id=1 -client-addr=:8080 -peer-addr=:9000 -data-dir=data
+go run ./cmd/quorumd -node-id=1 -http-addr=:8080 -client-addr=:9090 -peer-addr=:9000 -data-dir=data
 curl http://127.0.0.1:8080/healthz
 curl http://127.0.0.1:8080/readyz
 ```
 
+In another shell:
+
+```sh
+go run ./cmd/quorumctl put demo/key value
+go run ./cmd/quorumctl get demo/key
+```
+
 ## Roadmap
 
-1. Persist Raft hard state and log entries with `internal/storage`.
-2. Generate protobuf bindings and implement the gRPC client/peer transports.
-3. Wire `quorumd` into a real static three-node cluster.
-4. Add leases, fencing tokens, resumable watches, and Porcupine histories.
-5. Build the scheduler and booking workloads, then Docker/AWS chaos runs.
+1. Replace the synchronous single-node server path with the async Raft driver described in `plan.txt`.
+2. Wire `quorumd` into a real static three-node cluster using the peer transport.
+3. Add proposal tracking, leader redirect handling, client retries, and ReadIndex reads.
+4. Add leased claims, keepalive, lock/fencing APIs, and revision-resumable watches.
+5. Route the settlement ledger through replicated Raft commands.
+6. Add Porcupine history checks, Docker chaos runs, benchmarks, and AWS Terraform deployment.
 
+## Scope Limits
+
+The settlement ledger is intentionally not a payment processor. There is no auth, external integration, refunds, reserve/capture flow, merchant onboarding, transaction listing, or double-entry accounting. Its job is to prove idempotent, fenced state-machine updates under the coordination service.

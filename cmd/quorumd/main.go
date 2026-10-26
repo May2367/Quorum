@@ -27,7 +27,7 @@ func main() {
 	flag.StringVar(&cfg.DataDir, "data-dir", "data", "durable data directory")
 	flag.Parse()
 
-	raftNode, err := server.OpenPersistentRaft(cfg.DataDir, cfg.NodeID, []uint64{cfg.NodeID})
+	raftNode, err := server.OpenAsyncRaft(cfg.DataDir, cfg.NodeID, []uint64{cfg.NodeID}, server.AsyncRaftOptions{ElectionTimeout: 1})
 	if err != nil {
 		log.Fatalf("open raft runtime: %v", err)
 	}
@@ -36,7 +36,6 @@ func main() {
 			log.Printf("close raft runtime: %v", err)
 		}
 	}()
-	raftNode.Node().SetElectionTimeout(1)
 	if _, err := raftNode.Tick(); err != nil {
 		log.Fatalf("bootstrap single-node leader: %v", err)
 	}

@@ -10,3 +10,6 @@ coverage.out
 .vscode/
 
 deploy/docker/*.env
+
+plan.txt
+progress.txt
