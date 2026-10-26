@@ -35,6 +35,12 @@ func (s *directRaftSender) Add(id uint64, node *AsyncRaft) {
 	s.nodes[id] = node
 }
 
+func (s *directRaftSender) Remove(id uint64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.nodes, id)
+}
+
 func (s *directRaftSender) Send(ctx context.Context, msg raft.Message) ([]raft.Message, error) {
 	s.mu.RLock()
 	target := s.nodes[msg.To]
@@ -47,23 +53,26 @@ func (s *directRaftSender) Send(ctx context.Context, msg raft.Message) ([]raft.M
 }
 
 type multiNodeKVCluster struct {
-	sender   *directRaftSender
-	nodes    map[uint64]*AsyncRaft
-	services map[uint64]*KVService
-	machines map[uint64]*statemachine.KV
-	servers  []*grpc.Server
-	addrs    map[uint64]string
+	sender    *directRaftSender
+	nodes     map[uint64]*AsyncRaft
+	services  map[uint64]*KVService
+	machines  map[uint64]*statemachine.KV
+	servers   map[uint64]*grpc.Server
+	listeners map[uint64]net.Listener
+	addrs     map[uint64]string
 }
 
 func newMultiNodeKVCluster(t *testing.T) *multiNodeKVCluster {
 	t.Helper()
 	ids := []uint64{1, 2, 3}
 	c := &multiNodeKVCluster{
-		sender:   newDirectRaftSender(),
-		nodes:    map[uint64]*AsyncRaft{},
-		services: map[uint64]*KVService{},
-		machines: map[uint64]*statemachine.KV{},
-		addrs:    map[uint64]string{},
+		sender:    newDirectRaftSender(),
+		nodes:     map[uint64]*AsyncRaft{},
+		services:  map[uint64]*KVService{},
+		machines:  map[uint64]*statemachine.KV{},
+		servers:   map[uint64]*grpc.Server{},
+		listeners: map[uint64]net.Listener{},
+		addrs:     map[uint64]string{},
 	}
 	for _, id := range ids {
 		machine := statemachine.NewKV()
@@ -87,23 +96,40 @@ func newMultiNodeKVCluster(t *testing.T) *multiNodeKVCluster {
 		c.nodes[id] = node
 		c.services[id] = svc
 		c.machines[id] = machine
-		c.addrs[id] = serveKVService(t, svc, &c.servers)
+		addr, grpcServer, listener := serveKVService(t, svc)
+		c.addrs[id] = addr
+		c.servers[id] = grpcServer
+		c.listeners[id] = listener
 	}
 	t.Cleanup(c.Close)
 	return c
 }
 
 func (c *multiNodeKVCluster) Close() {
-	for _, server := range c.servers {
-		server.Stop()
+	for id := range c.nodes {
+		c.StopNode(id)
 	}
-	for _, node := range c.nodes {
+}
+
+func (c *multiNodeKVCluster) StopNode(id uint64) {
+	c.sender.Remove(id)
+	if server := c.servers[id]; server != nil {
+		server.Stop()
+		delete(c.servers, id)
+	}
+	if listener := c.listeners[id]; listener != nil {
+		_ = listener.Close()
+		delete(c.listeners, id)
+	}
+	if node := c.nodes[id]; node != nil {
 		_ = node.Close()
+		delete(c.nodes, id)
 	}
 }
 
 func (c *multiNodeKVCluster) ElectLeader(t *testing.T, id uint64) {
 	t.Helper()
+	c.nodes[id].rt.Node().SetElectionTimeout(1)
 	if _, err := c.nodes[id].Tick(); err != nil {
 		t.Fatal(err)
 	}
@@ -156,11 +182,20 @@ func (c *multiNodeKVCluster) WaitLeaderKnown(t *testing.T, leader uint64) {
 
 func (c *multiNodeKVCluster) WaitValueOnAll(t *testing.T, key, value string) {
 	t.Helper()
+	ids := make([]uint64, 0, len(c.machines))
+	for id := range c.machines {
+		ids = append(ids, id)
+	}
+	c.WaitValueOnNodes(t, key, value, ids...)
+}
+
+func (c *multiNodeKVCluster) WaitValueOnNodes(t *testing.T, key, value string, ids ...uint64) {
+	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		ok := true
-		for _, machine := range c.machines {
-			res, err := machine.Get(key)
+		for _, id := range ids {
+			res, err := c.machines[id].Get(key)
 			if err != nil || res.Value != value {
 				ok = false
 				break
@@ -171,18 +206,18 @@ func (c *multiNodeKVCluster) WaitValueOnAll(t *testing.T, key, value string) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	for id, machine := range c.machines {
-		res, err := machine.Get(key)
+	for _, id := range ids {
+		res, err := c.machines[id].Get(key)
 		if err != nil {
 			t.Logf("node %d get %q error: %v", id, key, err)
 			continue
 		}
 		t.Logf("node %d get %q = %+v", id, key, res)
 	}
-	t.Fatalf("value %q=%q was not applied on all nodes", key, value)
+	t.Fatalf("value %q=%q was not applied on nodes %v", key, value, ids)
 }
 
-func serveKVService(t *testing.T, svc *KVService, servers *[]*grpc.Server) string {
+func serveKVService(t *testing.T, svc *KVService) (string, *grpc.Server, net.Listener) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -190,11 +225,10 @@ func serveKVService(t *testing.T, svc *KVService, servers *[]*grpc.Server) strin
 	}
 	server := grpc.NewServer()
 	pb.RegisterQuorumServer(server, svc)
-	*servers = append(*servers, server)
 	go func() {
 		_ = server.Serve(listener)
 	}()
-	return listener.Addr().String()
+	return listener.Addr().String(), server, listener
 }
 
 func TestMultiNodeKVClientRedirectReplicatesWrite(t *testing.T) {
@@ -228,6 +262,42 @@ func TestMultiNodeKVClientRedirectReplicatesWrite(t *testing.T) {
 	if value != "claimed" || readRevision != 1 {
 		t.Fatalf("get value=%q revision=%d, want claimed revision 1", value, readRevision)
 	}
+}
+
+func TestMultiNodeKVCommittedWriteSurvivesLeaderFailover(t *testing.T) {
+	cluster := newMultiNodeKVCluster(t)
+	cluster.ElectLeader(t, 1)
+	cluster.WaitLeaderKnown(t, 1)
+
+	c := client.New(client.Config{
+		Endpoints:     []string{cluster.addrs[2], cluster.addrs[1], cluster.addrs[3]},
+		NodeEndpoints: cluster.addrs,
+		Timeout:       time.Second,
+	})
+	if revision, err := c.Put(context.Background(), "failover/key", "before", "failover-c1", 1); err != nil {
+		t.Fatal(err)
+	} else if revision != 1 {
+		t.Fatalf("initial revision = %d, want 1", revision)
+	}
+	cluster.WaitValueOnAll(t, "failover/key", "before")
+
+	cluster.StopNode(1)
+	cluster.ElectLeader(t, 2)
+	cluster.WaitLeaderKnown(t, 2)
+
+	value, revision, err := c.Get(context.Background(), "failover/key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value != "before" || revision != 1 {
+		t.Fatalf("after failover get value=%q revision=%d, want before revision 1", value, revision)
+	}
+	if revision, err := c.Put(context.Background(), "failover/key", "after", "failover-c1", 2); err != nil {
+		t.Fatal(err)
+	} else if revision != 2 {
+		t.Fatalf("post-failover revision = %d, want 2", revision)
+	}
+	cluster.WaitValueOnNodes(t, "failover/key", "after", 2, 3)
 }
 
 func TestMultiNodeKVClientHistoryIsLinearizable(t *testing.T) {
