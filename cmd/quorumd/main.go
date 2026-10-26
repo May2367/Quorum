@@ -28,6 +28,8 @@ func main() {
 	flag.StringVar(&cfg.PeerAddr, "peer-addr", ":9000", "peer listen address")
 	flag.StringVar(&cfg.DataDir, "data-dir", "data", "durable data directory")
 	flag.StringVar(&cfg.PeerMap, "peers", "", "static peer map as id=host:port,id=host:port")
+	flag.IntVar(&cfg.ElectionTimeout, "election-timeout", 0, "Raft election timeout in ticks; 0 uses the default")
+	flag.IntVar(&cfg.HeartbeatTimeout, "heartbeat-timeout", 0, "Raft heartbeat timeout in ticks; 0 uses the default")
 	flag.Parse()
 
 	peers, err := server.ParsePeerMap(cfg.PeerMap, cfg.NodeID, cfg.PeerAddr)
@@ -40,8 +42,10 @@ func main() {
 		sender = transport.NewPeerClient(peers.Addrs, 5*time.Second)
 	}
 	asyncOpts := server.AsyncRaftOptions{
-		Sender:      sender,
-		SendTimeout: 5 * time.Second,
+		Sender:           sender,
+		SendTimeout:      5 * time.Second,
+		ElectionTimeout:  cfg.ElectionTimeout,
+		HeartbeatTimeout: cfg.HeartbeatTimeout,
 	}
 	if len(peers.IDs) == 1 {
 		asyncOpts.ElectionTimeout = 1

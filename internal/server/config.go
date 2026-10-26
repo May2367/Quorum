@@ -10,12 +10,14 @@ import (
 )
 
 type Config struct {
-	NodeID     uint64
-	HTTPAddr   string
-	ClientAddr string
-	PeerAddr   string
-	DataDir    string
-	PeerMap    string
+	NodeID           uint64
+	HTTPAddr         string
+	ClientAddr       string
+	PeerAddr         string
+	DataDir          string
+	PeerMap          string
+	ElectionTimeout  int
+	HeartbeatTimeout int
 }
 
 type PeerConfig struct {
