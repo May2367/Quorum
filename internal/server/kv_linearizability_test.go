@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -122,4 +124,36 @@ func codeName(err error) string {
 		return "NotFound"
 	}
 	return status.Code(err).String()
+}
+
+func TestKVServiceRandomSequentialHistoriesAreLinearizable(t *testing.T) {
+	for seed := int64(1); seed <= 20; seed++ {
+		seed := seed
+		t.Run(fmt.Sprintf("seed-%d", seed), func(t *testing.T) {
+			svc, closeFn := newTestKVService(t)
+			defer closeFn()
+
+			rng := rand.New(rand.NewSource(seed))
+			var clock atomic.Int64
+			var history []linearizability.Operation
+			seq := map[string]uint64{}
+			for i := 0; i < 12; i++ {
+				clientID := fmt.Sprintf("seed-%d-client-%d", seed, i)
+				seq[clientID]++
+				switch rng.Intn(4) {
+				case 0:
+					history = append(history, recordPut(&clock, svc, "acct", fmt.Sprintf("v%d", rng.Intn(5)), clientID, seq[clientID]))
+				case 1:
+					history = append(history, recordGet(&clock, svc, "acct"))
+				case 2:
+					history = append(history, recordCAS(&clock, svc, "acct", fmt.Sprintf("v%d", rng.Intn(5)), fmt.Sprintf("v%d", rng.Intn(5)+10), clientID, seq[clientID]))
+				case 3:
+					history = append(history, recordDelete(&clock, svc, "acct", clientID, seq[clientID]))
+				}
+			}
+			if err := linearizability.CheckKV(history); err != nil {
+				t.Fatalf("history is not linearizable: %v\nhistory=%+v", err, history)
+			}
+		})
+	}
 }
