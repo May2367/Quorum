@@ -184,6 +184,9 @@ func (c *Cluster) CheckInvariants() error {
 	if err := c.checkCommittedEntriesPresent(); err != nil {
 		return err
 	}
+	if err := c.checkCommittedPrefixConsistency(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -259,6 +262,34 @@ func (c *Cluster) checkLogMatching() error {
 						return fmt.Errorf("log matching failed nodes %d/%d index %d prefix %d", aID, bID, idx+1, prefix+1)
 					}
 				}
+			}
+		}
+	}
+	return nil
+}
+
+func (c *Cluster) checkCommittedPrefixConsistency() error {
+	indexes := make([]int, 0, len(c.Committed))
+	for index := range c.Committed {
+		indexes = append(indexes, int(index))
+	}
+	sort.Ints(indexes)
+	for _, id := range c.peers {
+		n := c.Nodes[id]
+		if n == nil {
+			continue
+		}
+		entries := n.Entries()
+		for _, rawIndex := range indexes {
+			index := uint64(rawIndex)
+			if index > n.Commit() {
+				break
+			}
+			if int(index) > len(entries) {
+				return fmt.Errorf("node %d committed prefix missing index %d", id, index)
+			}
+			if !sameEntry(entries[index-1], c.Committed[index]) {
+				return fmt.Errorf("node %d committed prefix index %d = %+v, want %+v", id, index, entries[index-1], c.Committed[index])
 			}
 		}
 	}
