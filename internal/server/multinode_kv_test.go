@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -661,6 +662,77 @@ func TestMultiNodeKVPorcupineHistorySurvivesPartition(t *testing.T) {
 	cluster.HealNode(1)
 	cluster.WaitLeaderKnown(t, 2)
 	cluster.WaitValueOnAll(t, "acct", "10")
+}
+
+func TestSeededMultiNodeKVPorcupineHistoriesUnderPartition(t *testing.T) {
+	for seed := int64(1); seed <= 5; seed++ {
+		seed := seed
+		t.Run(fmt.Sprintf("seed-%d", seed), func(t *testing.T) {
+			cluster := newMultiNodeKVCluster(t)
+			cluster.ElectLeader(t, 1)
+			cluster.WaitLeaderKnown(t, 1)
+
+			c := client.New(client.Config{
+				Endpoints:     []string{cluster.addrs[2], cluster.addrs[3], cluster.addrs[1]},
+				NodeEndpoints: cluster.addrs,
+				Timeout:       time.Second,
+			})
+			if revision, err := c.Put(context.Background(), "acct", "0", fmt.Sprintf("seed-%d-init", seed), 1); err != nil {
+				t.Fatal(err)
+			} else if revision != 1 {
+				t.Fatalf("seed revision = %d, want 1", revision)
+			}
+			cluster.WaitValueOnAll(t, "acct", "0")
+
+			cluster.PartitionNode(1)
+			cluster.ElectLeader(t, 2)
+			cluster.WaitLeaderKnownOnNodes(t, 2, 2, 3)
+
+			rng := rand.New(rand.NewSource(seed))
+			clients := []*client.Client{
+				client.New(client.Config{Endpoints: []string{cluster.addrs[2], cluster.addrs[3]}, NodeEndpoints: cluster.addrs, Timeout: time.Second}),
+				client.New(client.Config{Endpoints: []string{cluster.addrs[3], cluster.addrs[2]}, NodeEndpoints: cluster.addrs, Timeout: time.Second}),
+			}
+			var clock atomic.Int64
+			history := []linearizability.Operation{{ID: 1, Start: 0, End: 0, Kind: linearizability.OpPut, Key: "acct", Value: "0", OK: true, Revision: 1}}
+			expected := "0"
+			nextValue := 1
+			for round := 0; round < 4; round++ {
+				ops := make([]func() linearizability.Operation, 0, 3)
+				if rng.Intn(2) == 0 {
+					clientIndex := rng.Intn(len(clients))
+					ops = append(ops, func() linearizability.Operation {
+						return recordClientGet(&clock, clients[clientIndex], "acct")
+					})
+				}
+				from := expected
+				to := fmt.Sprintf("%d", nextValue)
+				clientID := fmt.Sprintf("seed-%d-cas-%d", seed, round)
+				casClientIndex := rng.Intn(len(clients))
+				ops = append(ops, func() linearizability.Operation {
+					return recordClientCAS(&clock, clients[casClientIndex], "acct", from, to, clientID, 1)
+				})
+				if rng.Intn(2) == 0 {
+					clientIndex := rng.Intn(len(clients))
+					ops = append(ops, func() linearizability.Operation {
+						return recordClientGet(&clock, clients[clientIndex], "acct")
+					})
+				}
+				recorded := runClientHistoryOps(ops)
+				for i := range recorded {
+					recorded[i].ID = len(history) + i + 1
+				}
+				history = append(history, recorded...)
+				checkKVHistory(t, history)
+				expected = to
+				nextValue++
+			}
+
+			cluster.HealNode(1)
+			cluster.WaitLeaderKnown(t, 2)
+			cluster.WaitValueOnAll(t, "acct", expected)
+		})
+	}
 }
 
 func TestMultiNodeKVPorcupineHistorySurvivesLeaderFailover(t *testing.T) {
