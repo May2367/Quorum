@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"math/rand"
 	"testing"
+
+	"quorum/internal/raft"
 )
 
 func TestSeededRaftSafetyManySeeds(t *testing.T) {
-	for seed := int64(1); seed <= 25; seed++ {
+	for seed := int64(1); seed <= 50; seed++ {
 		seed := seed
 		t.Run(fmt.Sprintf("seed-%d", seed), func(t *testing.T) {
 			cluster := NewSeeded(seed, 1, 2, 3)
@@ -101,4 +103,68 @@ func partitionRandomPair(cluster *Cluster, rng *rand.Rand) {
 		return
 	}
 	cluster.Partition(a, b)
+}
+
+func TestPartitionedLeaderConvergesAfterMajorityCommit(t *testing.T) {
+	cluster := NewSeeded(42, 1, 2, 3, 4, 5)
+	cluster.SetElectionTimeout(1, 1)
+	cluster.Tick(1)
+	cluster.Drain()
+	leader, ok := cluster.Leader()
+	if !ok || leader != 1 {
+		t.Fatalf("leader = %d ok=%t, want node 1", leader, ok)
+	}
+
+	cluster.Propose(1, []byte("before partition"))
+	cluster.Drain()
+	if err := cluster.CheckInvariants(); err != nil {
+		t.Fatal(err)
+	}
+
+	cluster.PartitionGroups([]uint64{1}, []uint64{2, 3, 4, 5})
+	cluster.SetElectionTimeout(2, 1)
+	cluster.Tick(2)
+	cluster.Drain()
+	majorityLeader := firstLeaderIn(cluster, 2, 3, 4, 5)
+	if majorityLeader == 0 {
+		t.Fatalf("majority side did not elect a leader")
+	}
+	cluster.Propose(majorityLeader, []byte("committed by majority"))
+	cluster.Drain()
+	if err := cluster.CheckInvariants(); err != nil {
+		t.Fatalf("partitioned invariants: %v", err)
+	}
+
+	cluster.HealAll()
+	for i := 0; i < 20; i++ {
+		cluster.Tick(majorityLeader)
+		cluster.Drain()
+	}
+	if err := cluster.CheckInvariants(); err != nil {
+		t.Fatalf("healed invariants: %v", err)
+	}
+
+	entries := cluster.Durable[1].Entries
+	if !containsEntryData(entries, "committed by majority") {
+		t.Fatalf("old leader durable entries = %+v, want majority committed entry", entries)
+	}
+}
+
+func firstLeaderIn(cluster *Cluster, ids ...uint64) uint64 {
+	for _, id := range ids {
+		n := cluster.Nodes[id]
+		if n != nil && n.State() == raft.Leader {
+			return id
+		}
+	}
+	return 0
+}
+
+func containsEntryData(entries []raft.Entry, want string) bool {
+	for _, ent := range entries {
+		if string(ent.Data) == want {
+			return true
+		}
+	}
+	return false
 }
