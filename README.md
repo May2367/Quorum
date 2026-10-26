@@ -2,7 +2,7 @@
 
 Quorum is a Raft-based coordination service in Go. The core project is a replicated key-value store with WAL persistence, CAS, sessions, watches, and a path toward leases and fencing tokens. The flagship workload is a small settlement ledger that makes the distributed-systems guarantees concrete: workers settle idempotent money-movement jobs while duplicate retries and stale fencing tokens are rejected.
 
-This is an undergraduate resume project, so the repository favors a clear end-to-end story over production breadth. The current code is a foundation plus a replicated settlement workload, seeded Raft safety tests, WAL-backed restart coverage, static peer transport wiring, public lock/ledger APIs, and client redirect support. Porcupine checks, broader chaos tests, benchmarks, and AWS deployment remain roadmap items.
+This is an undergraduate resume project, so the repository favors a clear end-to-end story over production breadth. The current code is a foundation plus a replicated settlement workload, seeded Raft safety tests, WAL-backed restart coverage, static peer transport wiring, public lock/ledger APIs, and client redirect support. Broader Porcupine fault-injection campaigns, network-fault chaos tests, failover/recovery benchmarks, and AWS deployment remain roadmap items.
 
 ## What Works Now
 
@@ -30,6 +30,7 @@ The current safety suite checks the Raft foundation before adding more server br
 - Partitioned old-leader convergence after a majority-side commit.
 - WAL truncation of incomplete and corrupt trailing records while preserving the complete prefix.
 - WAL-backed follower crash, restart, catch-up, and durable re-restart.
+- Initial Porcupine-backed KV history checks, including a multi-node leader-failover history.
 
 Run:
 

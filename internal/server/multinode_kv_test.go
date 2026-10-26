@@ -565,9 +565,77 @@ func TestMultiNodeKVClientHistoryIsLinearizable(t *testing.T) {
 	}
 	wg.Wait()
 	history = append(history, recorded...)
-	if err := linearizability.CheckKV(history); err != nil {
-		t.Fatalf("history is not linearizable: %v\nhistory=%+v", err, history)
+	checkKVHistory(t, history)
+}
+
+func TestMultiNodeKVPorcupineHistorySurvivesLeaderFailover(t *testing.T) {
+	cluster := newMultiNodeKVCluster(t)
+	cluster.ElectLeader(t, 1)
+	cluster.WaitLeaderKnown(t, 1)
+
+	c := client.New(client.Config{
+		Endpoints:     []string{cluster.addrs[2], cluster.addrs[3], cluster.addrs[1]},
+		NodeEndpoints: cluster.addrs,
+		Timeout:       time.Second,
+	})
+	if revision, err := c.Put(context.Background(), "acct", "0", "pf-seed", 1); err != nil {
+		t.Fatal(err)
+	} else if revision != 1 {
+		t.Fatalf("seed revision = %d, want 1", revision)
 	}
+	cluster.WaitValueOnAll(t, "acct", "0")
+
+	clients := []*client.Client{
+		client.New(client.Config{Endpoints: []string{cluster.addrs[2], cluster.addrs[3], cluster.addrs[1]}, NodeEndpoints: cluster.addrs, Timeout: time.Second}),
+		client.New(client.Config{Endpoints: []string{cluster.addrs[3], cluster.addrs[2], cluster.addrs[1]}, NodeEndpoints: cluster.addrs, Timeout: time.Second}),
+	}
+	var clock atomic.Int64
+	history := []linearizability.Operation{{ID: 1, Start: 0, End: 0, Kind: linearizability.OpPut, Key: "acct", Value: "0", OK: true, Revision: 1}}
+	before := []func() linearizability.Operation{
+		func() linearizability.Operation { return recordClientGet(&clock, clients[0], "acct") },
+		func() linearizability.Operation {
+			return recordClientCAS(&clock, clients[1], "acct", "0", "10", "pf-c1", 1)
+		},
+	}
+	recorded := runClientHistoryOps(before)
+	for i := range recorded {
+		recorded[i].ID = i + 2
+	}
+	history = append(history, recorded...)
+	cluster.WaitValueOnAll(t, "acct", "10")
+
+	cluster.StopNode(1)
+	cluster.ElectLeader(t, 2)
+	cluster.WaitLeaderKnown(t, 2)
+
+	after := []func() linearizability.Operation{
+		func() linearizability.Operation { return recordClientGet(&clock, clients[0], "acct") },
+		func() linearizability.Operation {
+			return recordClientCAS(&clock, clients[1], "acct", "10", "20", "pf-c2", 1)
+		},
+		func() linearizability.Operation { return recordClientGet(&clock, clients[0], "acct") },
+	}
+	recorded = runClientHistoryOps(after)
+	for i := range recorded {
+		recorded[i].ID = i + 4
+	}
+	history = append(history, recorded...)
+	checkKVHistory(t, history)
+}
+
+func runClientHistoryOps(ops []func() linearizability.Operation) []linearizability.Operation {
+	var wg sync.WaitGroup
+	recorded := make([]linearizability.Operation, len(ops))
+	for i, op := range ops {
+		i, op := i, op
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			recorded[i] = op()
+		}()
+	}
+	wg.Wait()
+	return recorded
 }
 
 func recordClientPut(clock *atomic.Int64, c *client.Client, key, value, clientID string, sequence uint64) linearizability.Operation {

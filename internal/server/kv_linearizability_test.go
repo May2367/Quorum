@@ -55,9 +55,7 @@ func TestKVServiceConcurrentHistoryIsLinearizable(t *testing.T) {
 	}
 	wg.Wait()
 
-	if err := linearizability.CheckKV(history); err != nil {
-		t.Fatalf("history is not linearizable: %v\nhistory=%+v", err, history)
-	}
+	checkKVHistory(t, history)
 }
 
 func recordPut(clock *atomic.Int64, svc *KVService, key, value, clientID string, sequence uint64) linearizability.Operation {
@@ -151,9 +149,17 @@ func TestKVServiceRandomSequentialHistoriesAreLinearizable(t *testing.T) {
 					history = append(history, recordDelete(&clock, svc, "acct", clientID, seq[clientID]))
 				}
 			}
-			if err := linearizability.CheckKV(history); err != nil {
-				t.Fatalf("history is not linearizable: %v\nhistory=%+v", err, history)
-			}
+			checkKVHistory(t, history)
 		})
+	}
+}
+
+func checkKVHistory(t *testing.T, history []linearizability.Operation) {
+	t.Helper()
+	if err := linearizability.CheckKV(history); err != nil {
+		t.Fatalf("history is not linearizable with local checker: %v\nhistory=%+v", err, history)
+	}
+	if err := linearizability.CheckKVPorcupine(history); err != nil {
+		t.Fatalf("history is not linearizable with porcupine: %v\nhistory=%+v", err, history)
 	}
 }
