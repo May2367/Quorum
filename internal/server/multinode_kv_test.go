@@ -53,30 +53,36 @@ func (s *directRaftSender) Send(ctx context.Context, msg raft.Message) ([]raft.M
 }
 
 type multiNodeKVCluster struct {
-	sender    *directRaftSender
-	nodes     map[uint64]*AsyncRaft
-	services  map[uint64]*KVService
-	machines  map[uint64]*statemachine.KV
-	servers   map[uint64]*grpc.Server
-	listeners map[uint64]net.Listener
-	addrs     map[uint64]string
+	sender       *directRaftSender
+	nodes        map[uint64]*AsyncRaft
+	services     map[uint64]*KVService
+	lockServices map[uint64]*LockService
+	machines     map[uint64]*statemachine.KV
+	locks        map[uint64]*statemachine.LockTable
+	servers      map[uint64]*grpc.Server
+	listeners    map[uint64]net.Listener
+	addrs        map[uint64]string
 }
 
 func newMultiNodeKVCluster(t *testing.T) *multiNodeKVCluster {
 	t.Helper()
 	ids := []uint64{1, 2, 3}
 	c := &multiNodeKVCluster{
-		sender:    newDirectRaftSender(),
-		nodes:     map[uint64]*AsyncRaft{},
-		services:  map[uint64]*KVService{},
-		machines:  map[uint64]*statemachine.KV{},
-		servers:   map[uint64]*grpc.Server{},
-		listeners: map[uint64]net.Listener{},
-		addrs:     map[uint64]string{},
+		sender:       newDirectRaftSender(),
+		nodes:        map[uint64]*AsyncRaft{},
+		services:     map[uint64]*KVService{},
+		lockServices: map[uint64]*LockService{},
+		machines:     map[uint64]*statemachine.KV{},
+		locks:        map[uint64]*statemachine.LockTable{},
+		servers:      map[uint64]*grpc.Server{},
+		listeners:    map[uint64]net.Listener{},
+		addrs:        map[uint64]string{},
 	}
 	for _, id := range ids {
 		machine := statemachine.NewKV()
+		locks := statemachine.NewLockTable()
 		svc := NewKVService(nil, machine)
+		lockSvc := NewLockService(nil, locks)
 		electionTimeout := 100
 		if id == 1 {
 			electionTimeout = 1
@@ -86,16 +92,22 @@ func newMultiNodeKVCluster(t *testing.T) *multiNodeKVCluster {
 			SendTimeout:      time.Second,
 			ElectionTimeout:  electionTimeout,
 			HeartbeatTimeout: 1,
-			Apply:            svc.ApplyCommitted,
+			Apply: func(entries []raft.Entry) {
+				svc.ApplyCommitted(entries)
+				lockSvc.ApplyCommitted(entries)
+			},
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
 		svc.SetRaftRuntime(node)
+		lockSvc.SetRaftRuntime(node)
 		c.sender.Add(id, node)
 		c.nodes[id] = node
 		c.services[id] = svc
+		c.lockServices[id] = lockSvc
 		c.machines[id] = machine
+		c.locks[id] = locks
 		addr, grpcServer, listener := serveKVService(t, svc)
 		c.addrs[id] = addr
 		c.servers[id] = grpcServer
@@ -217,6 +229,30 @@ func (c *multiNodeKVCluster) WaitValueOnNodes(t *testing.T, key, value string, i
 	t.Fatalf("value %q=%q was not applied on nodes %v", key, value, ids)
 }
 
+func (c *multiNodeKVCluster) WaitLockOnNodes(t *testing.T, name, holder string, token uint64, ids ...uint64) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		ok := true
+		for _, id := range ids {
+			res, held := c.locks[id].Get(name)
+			if !held || res.Holder != holder || res.FencingToken != token {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	for _, id := range ids {
+		res, held := c.locks[id].Get(name)
+		t.Logf("node %d lock held=%t result=%+v", id, held, res)
+	}
+	t.Fatalf("lock %q holder=%q token=%d was not applied on nodes %v", name, holder, token, ids)
+}
+
 func serveKVService(t *testing.T, svc *KVService) (string, *grpc.Server, net.Listener) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -229,6 +265,21 @@ func serveKVService(t *testing.T, svc *KVService) (string, *grpc.Server, net.Lis
 		_ = server.Serve(listener)
 	}()
 	return listener.Addr().String(), server, listener
+}
+
+func TestMultiNodeLockAcquireReplicatesFenceToken(t *testing.T) {
+	cluster := newMultiNodeKVCluster(t)
+	cluster.ElectLeader(t, 1)
+	cluster.WaitLeaderKnown(t, 1)
+
+	res, err := cluster.lockServices[1].Acquire(context.Background(), "settlement/job-9", "worker-1", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.FencingToken == 0 {
+		t.Fatalf("fencing token = 0")
+	}
+	cluster.WaitLockOnNodes(t, "settlement/job-9", "worker-1", res.FencingToken, 1, 2, 3)
 }
 
 func TestMultiNodeKVClientRedirectReplicatesWrite(t *testing.T) {

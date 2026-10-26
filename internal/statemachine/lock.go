@@ -1,6 +1,9 @@
 package statemachine
 
-import "errors"
+import (
+	"errors"
+	"sync"
+)
 
 var (
 	ErrLockHeld        = errors.New("lock is held")
@@ -11,6 +14,7 @@ var (
 )
 
 type LockTable struct {
+	mu    sync.Mutex
 	locks map[string]lockState
 	tick  uint64
 }
@@ -34,6 +38,8 @@ func NewLockTable() *LockTable {
 }
 
 func (l *LockTable) Acquire(name, holder string, ttlTicks, fencingToken uint64) (LockResult, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	if ttlTicks == 0 {
 		return LockResult{}, ErrInvalidLeaseTTL
 	}
@@ -54,6 +60,8 @@ func (l *LockTable) Acquire(name, holder string, ttlTicks, fencingToken uint64) 
 }
 
 func (l *LockTable) KeepAlive(name, holder string, ttlTicks uint64) (LockResult, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	if ttlTicks == 0 {
 		return LockResult{}, ErrInvalidLeaseTTL
 	}
@@ -71,6 +79,8 @@ func (l *LockTable) KeepAlive(name, holder string, ttlTicks uint64) (LockResult,
 }
 
 func (l *LockTable) Release(name, holder string) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.expireLocked()
 	cur, ok := l.locks[name]
 	if !ok {
@@ -84,15 +94,21 @@ func (l *LockTable) Release(name, holder string) error {
 }
 
 func (l *LockTable) Advance(ticks uint64) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.tick += ticks
 	l.expireLocked()
 }
 
 func (l *LockTable) Tick() uint64 {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	return l.tick
 }
 
 func (l *LockTable) Get(name string) (LockResult, bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.expireLocked()
 	cur, ok := l.locks[name]
 	if !ok {
