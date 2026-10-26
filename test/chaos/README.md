@@ -10,6 +10,12 @@ the surviving endpoints, and prints the seed plus log directory.
 test/chaos/process-settlement-smoke.sh 1
 ```
 
+Run a sequential seed range:
+
+```sh
+test/chaos/process-settlement-seeds.sh 1 3
+```
+
 Future Docker/Compose scripts should add seeded leader kills, network
 partitions, latency, and packet loss. Every run should print the seed so
 failures are reproducible.
