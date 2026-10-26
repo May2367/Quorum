@@ -264,6 +264,9 @@ func (c *Client) withConn(ctx context.Context, fn func(context.Context, *grpc.Cl
 		}
 		if err != nil {
 			lastErr = err
+			if !isRetryableRPCError(err) {
+				return err
+			}
 			if redirect := c.redirectEndpoint(err); redirect != "" && !tried[redirect] && !queued[redirect] {
 				queue = append([]string{redirect}, queue...)
 				queued[redirect] = true
@@ -294,6 +297,11 @@ func (c *Client) rememberEndpoint(endpoint string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.preferred = endpoint
+}
+
+func isRetryableRPCError(err error) bool {
+	st, ok := status.FromError(err)
+	return ok && st.Code() == codes.Unavailable
 }
 
 func (c *Client) redirectEndpoint(err error) string {

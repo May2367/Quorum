@@ -66,6 +66,29 @@ func TestClientFollowsLeaderRedirectHint(t *testing.T) {
 	}
 }
 
+func TestClientDoesNotRetrySemanticErrors(t *testing.T) {
+	var calls atomic.Int64
+	firstAddr, closeFirst := serveTestQuorum(t, &testQuorumServer{put: func(context.Context, *pb.PutRequest) (*pb.PutResponse, error) {
+		calls.Add(1)
+		return nil, status.Error(codes.FailedPrecondition, "duplicate transfer")
+	}})
+	defer closeFirst()
+	secondAddr, closeSecond := serveTestQuorum(t, &testQuorumServer{put: func(context.Context, *pb.PutRequest) (*pb.PutResponse, error) {
+		calls.Add(1)
+		return &pb.PutResponse{Revision: 99}, nil
+	}})
+	defer closeSecond()
+
+	c := New(Config{Endpoints: []string{firstAddr, secondAddr}, Timeout: time.Second})
+	_, err := c.Put(context.Background(), "k", "v", "c1", 1)
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("put err = %v, want FailedPrecondition", err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("calls = %d, want 1", calls.Load())
+	}
+}
+
 func serveTestQuorum(t *testing.T, svc pb.QuorumServer) (string, func()) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")

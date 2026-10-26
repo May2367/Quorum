@@ -85,11 +85,11 @@ Docker Compose passes that map to three nodes:
 docker compose -f deploy/docker/compose.yml up --build
 ```
 
-The cluster wiring starts separate peer gRPC listeners, sends Raft `Ready.Messages` through the peer transport, and supports client redirects. It is usable for the current replicated APIs, but Docker/container chaos and larger multi-node workload demos are still future work.
+The cluster wiring starts separate peer gRPC listeners, sends Raft `Ready.Messages` through the peer transport, and supports client redirects. The replicated settlement demo has been smoke-tested against three local `quorumd` processes. Docker/container chaos and larger multi-node workload demos are still future work.
 
 ## Roadmap
 
-1. Drive the settlement demo against a multi-node process cluster and add leader-kill/failover coverage.
+1. Add containerized settlement chaos with worker/leader kills and replayable seeds.
 2. Add Porcupine or a scalable linearizability checker for larger fault-injected histories.
 3. Add Docker chaos runs, benchmarks, and one optimization pass.
 4. Add minimal AWS Terraform deployment and recorded cross-AZ numbers.

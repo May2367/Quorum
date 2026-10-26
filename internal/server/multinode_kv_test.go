@@ -118,7 +118,7 @@ func newMultiNodeKVCluster(t *testing.T) *multiNodeKVCluster {
 		c.machines[id] = machine
 		c.locks[id] = locks
 		c.ledgers[id] = ledger
-		addr, grpcServer, listener := serveKVService(t, svc)
+		addr, grpcServer, listener := serveClientServices(t, svc, lockSvc, ledgerSvc)
 		c.addrs[id] = addr
 		c.servers[id] = grpcServer
 		c.listeners[id] = listener
@@ -263,14 +263,16 @@ func (c *multiNodeKVCluster) WaitLockOnNodes(t *testing.T, name, holder string, 
 	t.Fatalf("lock %q holder=%q token=%d was not applied on nodes %v", name, holder, token, ids)
 }
 
-func serveKVService(t *testing.T, svc *KVService) (string, *grpc.Server, net.Listener) {
+func serveClientServices(t *testing.T, kv *KVService, locks *LockService, ledger *LedgerService) (string, *grpc.Server, net.Listener) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	server := grpc.NewServer()
-	pb.RegisterQuorumServer(server, svc)
+	pb.RegisterQuorumServer(server, kv)
+	pb.RegisterLockServer(server, NewLockRPCServer(locks))
+	pb.RegisterLedgerServer(server, NewLedgerRPCServer(ledger))
 	go func() {
 		_ = server.Serve(listener)
 	}()
@@ -331,6 +333,122 @@ func TestMultiNodeLedgerRejectsStaleLockHolderTransfer(t *testing.T) {
 	}
 	if balance != 900 {
 		t.Fatalf("escrow balance = %d, want 900", balance)
+	}
+}
+
+func TestMultiNodeSettlementWorkloadSurvivesLeaderFailover(t *testing.T) {
+	cluster := newMultiNodeKVCluster(t)
+	cluster.ElectLeader(t, 1)
+	cluster.WaitLeaderKnown(t, 1)
+
+	c := client.New(client.Config{
+		Endpoints:     []string{cluster.addrs[2], cluster.addrs[3], cluster.addrs[1]},
+		NodeEndpoints: cluster.addrs,
+		Timeout:       time.Second,
+	})
+	ctx := context.Background()
+	const jobs = 12
+	const cents = int64(100)
+	if err := c.CreateAccount(ctx, "escrow", jobs*cents); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 3; i++ {
+		if err := c.CreateAccount(ctx, fmt.Sprintf("merchant-%d", i), 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i < jobs/2; i++ {
+		jobID := fmt.Sprintf("settlement-%02d", i)
+		lock, err := c.AcquireLock(ctx, "settlement/"+jobID, "worker-before", 10)
+		if err != nil {
+			t.Fatalf("acquire before failover %s: %v", jobID, err)
+		}
+		if _, err := c.Transfer(ctx, "escrow", fmt.Sprintf("merchant-%d", i%3), cents, jobID, lock.FencingToken); err != nil {
+			t.Fatalf("transfer before failover %s: %v", jobID, err)
+		}
+		if _, err := c.Transfer(ctx, "escrow", fmt.Sprintf("merchant-%d", i%3), cents, jobID, lock.FencingToken); status.Code(err) != codes.FailedPrecondition {
+			t.Fatalf("duplicate before failover %s err = %v, want FailedPrecondition", jobID, err)
+		}
+	}
+
+	cluster.StopNode(1)
+	cluster.ElectLeader(t, 2)
+	cluster.WaitLeaderKnown(t, 2)
+
+	for i := jobs / 2; i < jobs; i++ {
+		jobID := fmt.Sprintf("settlement-%02d", i)
+		lock, err := c.AcquireLock(ctx, "settlement/"+jobID, "worker-after", 10)
+		if err != nil {
+			t.Fatalf("acquire after failover %s: %v", jobID, err)
+		}
+		if _, err := c.Transfer(ctx, "escrow", fmt.Sprintf("merchant-%d", i%3), cents, jobID, lock.FencingToken); err != nil {
+			t.Fatalf("transfer after failover %s: %v", jobID, err)
+		}
+		if _, err := c.Transfer(ctx, "escrow", fmt.Sprintf("merchant-%d", i%3), cents, jobID, lock.FencingToken); status.Code(err) != codes.FailedPrecondition {
+			t.Fatalf("duplicate after failover %s err = %v, want FailedPrecondition", jobID, err)
+		}
+	}
+	if err := c.CreateAccount(ctx, "fence/escrow", 10); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.CreateAccount(ctx, "fence/merchant", 0); err != nil {
+		t.Fatal(err)
+	}
+	first, err := c.AcquireLock(ctx, "settlement/stale", "stale-worker", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.AdvanceLock(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	second, err := c.AcquireLock(ctx, "settlement/stale", "fresh-worker", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.FencingToken <= first.FencingToken {
+		t.Fatalf("second token = %d, want > %d", second.FencingToken, first.FencingToken)
+	}
+	if _, err := c.Transfer(ctx, "fence/escrow", "fence/merchant", 1, "settlement-stale", second.FencingToken); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Transfer(ctx, "fence/escrow", "fence/merchant", 1, "settlement-stale", first.FencingToken); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("stale transfer err = %v, want FailedPrecondition", err)
+	}
+
+	escrow, err := c.GetBalance(ctx, "escrow")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if escrow != 0 {
+		t.Fatalf("escrow balance = %d, want 0", escrow)
+	}
+	fenceEscrow, err := c.GetBalance(ctx, "fence/escrow")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fenceMerchant, err := c.GetBalance(ctx, "fence/merchant")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var total int64 = escrow + fenceEscrow + fenceMerchant
+	for i := 0; i < 3; i++ {
+		balance, err := c.GetBalance(ctx, fmt.Sprintf("merchant-%d", i))
+		if err != nil {
+			t.Fatal(err)
+		}
+		total += balance
+	}
+	if total != jobs*cents+10 {
+		t.Fatalf("total cents = %d, want %d", total, jobs*cents+10)
+	}
+	for _, id := range []uint64{2, 3} {
+		balance, err := cluster.ledgers[id].GetBalance("escrow")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if balance != escrow {
+			t.Fatalf("node %d escrow = %d, want %d", id, balance, escrow)
+		}
 	}
 }
 
