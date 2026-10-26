@@ -21,12 +21,13 @@ import (
 )
 
 type directRaftSender struct {
-	mu    sync.RWMutex
-	nodes map[uint64]*AsyncRaft
+	mu      sync.RWMutex
+	nodes   map[uint64]*AsyncRaft
+	blocked map[[2]uint64]bool
 }
 
 func newDirectRaftSender() *directRaftSender {
-	return &directRaftSender{nodes: map[uint64]*AsyncRaft{}}
+	return &directRaftSender{nodes: map[uint64]*AsyncRaft{}, blocked: map[[2]uint64]bool{}}
 }
 
 func (s *directRaftSender) Add(id uint64, node *AsyncRaft) {
@@ -41,10 +42,28 @@ func (s *directRaftSender) Remove(id uint64) {
 	delete(s.nodes, id)
 }
 
+func (s *directRaftSender) Partition(a, b uint64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.blocked[[2]uint64{a, b}] = true
+	s.blocked[[2]uint64{b, a}] = true
+}
+
+func (s *directRaftSender) Heal(a, b uint64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.blocked, [2]uint64{a, b})
+	delete(s.blocked, [2]uint64{b, a})
+}
+
 func (s *directRaftSender) Send(ctx context.Context, msg raft.Message) ([]raft.Message, error) {
 	s.mu.RLock()
+	blocked := s.blocked[[2]uint64{msg.From, msg.To}]
 	target := s.nodes[msg.To]
 	s.mu.RUnlock()
+	if blocked {
+		return nil, fmt.Errorf("message from %d to %d is partitioned", msg.From, msg.To)
+	}
 	if target == nil {
 		return nil, fmt.Errorf("node %d is not registered", msg.To)
 	}
@@ -133,6 +152,22 @@ func (c *multiNodeKVCluster) Close() {
 	}
 }
 
+func (c *multiNodeKVCluster) PartitionNode(id uint64) {
+	for other := range c.nodes {
+		if other != id {
+			c.sender.Partition(id, other)
+		}
+	}
+}
+
+func (c *multiNodeKVCluster) HealNode(id uint64) {
+	for other := range c.nodes {
+		if other != id {
+			c.sender.Heal(id, other)
+		}
+	}
+}
+
 func (c *multiNodeKVCluster) StopNode(id uint64) {
 	c.sender.Remove(id)
 	if server := c.servers[id]; server != nil {
@@ -171,10 +206,24 @@ func (c *multiNodeKVCluster) ElectLeader(t *testing.T, id uint64) {
 
 func (c *multiNodeKVCluster) WaitLeaderKnown(t *testing.T, leader uint64) {
 	t.Helper()
+	ids := make([]uint64, 0, len(c.nodes))
+	for id := range c.nodes {
+		ids = append(ids, id)
+	}
+	c.WaitLeaderKnownOnNodes(t, leader, ids...)
+}
+
+func (c *multiNodeKVCluster) WaitLeaderKnownOnNodes(t *testing.T, leader uint64, ids ...uint64) {
+	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		known := true
-		for id, node := range c.nodes {
+		for _, id := range ids {
+			node := c.nodes[id]
+			if node == nil {
+				known = false
+				break
+			}
 			st, err := node.Status()
 			if err != nil {
 				t.Fatal(err)
@@ -199,7 +248,7 @@ func (c *multiNodeKVCluster) WaitLeaderKnown(t *testing.T, leader uint64) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	t.Fatalf("not all nodes learned leader %d", leader)
+	t.Fatalf("nodes %v did not learn leader %d", ids, leader)
 }
 
 func (c *multiNodeKVCluster) WaitValueOnAll(t *testing.T, key, value string) {
@@ -566,6 +615,52 @@ func TestMultiNodeKVClientHistoryIsLinearizable(t *testing.T) {
 	wg.Wait()
 	history = append(history, recorded...)
 	checkKVHistory(t, history)
+}
+
+func TestMultiNodeKVPorcupineHistorySurvivesPartition(t *testing.T) {
+	cluster := newMultiNodeKVCluster(t)
+	cluster.ElectLeader(t, 1)
+	cluster.WaitLeaderKnown(t, 1)
+
+	c := client.New(client.Config{
+		Endpoints:     []string{cluster.addrs[2], cluster.addrs[3], cluster.addrs[1]},
+		NodeEndpoints: cluster.addrs,
+		Timeout:       time.Second,
+	})
+	if revision, err := c.Put(context.Background(), "acct", "0", "partition-seed", 1); err != nil {
+		t.Fatal(err)
+	} else if revision != 1 {
+		t.Fatalf("seed revision = %d, want 1", revision)
+	}
+	cluster.WaitValueOnAll(t, "acct", "0")
+
+	var clock atomic.Int64
+	history := []linearizability.Operation{{ID: 1, Start: 0, End: 0, Kind: linearizability.OpPut, Key: "acct", Value: "0", OK: true, Revision: 1}}
+	cluster.PartitionNode(1)
+	cluster.ElectLeader(t, 2)
+	cluster.WaitLeaderKnownOnNodes(t, 2, 2, 3)
+
+	clients := []*client.Client{
+		client.New(client.Config{Endpoints: []string{cluster.addrs[2], cluster.addrs[3]}, NodeEndpoints: cluster.addrs, Timeout: time.Second}),
+		client.New(client.Config{Endpoints: []string{cluster.addrs[3], cluster.addrs[2]}, NodeEndpoints: cluster.addrs, Timeout: time.Second}),
+	}
+	partitioned := []func() linearizability.Operation{
+		func() linearizability.Operation { return recordClientGet(&clock, clients[0], "acct") },
+		func() linearizability.Operation {
+			return recordClientCAS(&clock, clients[1], "acct", "0", "10", "partition-c1", 1)
+		},
+		func() linearizability.Operation { return recordClientGet(&clock, clients[0], "acct") },
+	}
+	recorded := runClientHistoryOps(partitioned)
+	for i := range recorded {
+		recorded[i].ID = i + 2
+	}
+	history = append(history, recorded...)
+	checkKVHistory(t, history)
+
+	cluster.HealNode(1)
+	cluster.WaitLeaderKnown(t, 2)
+	cluster.WaitValueOnAll(t, "acct", "10")
 }
 
 func TestMultiNodeKVPorcupineHistorySurvivesLeaderFailover(t *testing.T) {

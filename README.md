@@ -30,7 +30,7 @@ The current safety suite checks the Raft foundation before adding more server br
 - Partitioned old-leader convergence after a majority-side commit.
 - WAL truncation of incomplete and corrupt trailing records while preserving the complete prefix.
 - WAL-backed follower crash, restart, catch-up, and durable re-restart.
-- Initial Porcupine-backed KV history checks, including a multi-node leader-failover history.
+- Initial Porcupine-backed KV history checks, including multi-node leader-failover and partition histories.
 
 Run:
 
