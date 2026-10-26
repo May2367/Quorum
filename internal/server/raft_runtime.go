@@ -5,6 +5,16 @@ import (
 	"quorum/internal/storage"
 )
 
+type RaftStatus struct {
+	ID     uint64
+	Leader uint64
+	State  raft.State
+}
+
+func (s RaftStatus) IsLeader() bool {
+	return s.State == raft.Leader
+}
+
 type PersistentRaft struct {
 	node  *raft.Node
 	store *storage.RaftStore
@@ -49,6 +59,10 @@ func (r *PersistentRaft) DrainReady() (raft.Ready, error) {
 
 func (r *PersistentRaft) Node() *raft.Node {
 	return r.node
+}
+
+func (r *PersistentRaft) Status() (RaftStatus, error) {
+	return RaftStatus{ID: r.node.ID(), Leader: r.node.Leader(), State: r.node.State()}, nil
 }
 
 func (r *PersistentRaft) Close() error {

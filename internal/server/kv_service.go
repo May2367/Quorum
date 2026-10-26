@@ -30,6 +30,10 @@ type applyingRaftRuntime interface {
 	AppliesCommittedEntries() bool
 }
 
+type statusRaftRuntime interface {
+	Status() (RaftStatus, error)
+}
+
 type applyResult struct {
 	result statemachine.Result
 	err    error
@@ -161,6 +165,9 @@ func (s *KVService) propose(ctx context.Context, cmd statemachine.Command) (stat
 }
 
 func (s *KVService) proposeAndWaitApplied(ctx context.Context, cmd statemachine.Command) (statemachine.Result, error) {
+	if err := s.ensureLeader(); err != nil {
+		return statemachine.Result{}, err
+	}
 	cmd.ProposalID = s.nextProposalID()
 	payload, err := encodeCommand(cmd)
 	if err != nil {
@@ -191,6 +198,9 @@ func (s *KVService) proposeAndApplyReady(ctx context.Context, cmd statemachine.C
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.ensureLeaderLocked(); err != nil {
+		return statemachine.Result{}, err
+	}
 	rd, err := s.proposeRaft(ctx, payload)
 	if err != nil {
 		return statemachine.Result{}, status.Error(codes.Internal, err.Error())
@@ -331,4 +341,41 @@ func (s *KVService) completeWaiterLocked(proposalID string, res applyResult) {
 	}
 	delete(s.waiters, proposalID)
 	ch <- res
+}
+
+func (s *KVService) ensureLeader() error {
+	runtime, ok := s.raft.(statusRaftRuntime)
+	if !ok {
+		return nil
+	}
+	st, err := runtime.Status()
+	if err != nil {
+		return status.Error(codes.Internal, err.Error())
+	}
+	if !st.IsLeader() {
+		return notLeaderError(st)
+	}
+	return nil
+}
+
+func (s *KVService) ensureLeaderLocked() error {
+	runtime, ok := s.raft.(statusRaftRuntime)
+	if !ok {
+		return nil
+	}
+	st, err := runtime.Status()
+	if err != nil {
+		return status.Error(codes.Internal, err.Error())
+	}
+	if !st.IsLeader() {
+		return notLeaderError(st)
+	}
+	return nil
+}
+
+func notLeaderError(st RaftStatus) error {
+	if st.Leader == 0 {
+		return status.Error(codes.Unavailable, "not leader: leader_id=0")
+	}
+	return status.Error(codes.Unavailable, fmt.Sprintf("not leader: leader_id=%d", st.Leader))
 }

@@ -55,11 +55,13 @@ const (
 	asyncStep
 	asyncPropose
 	asyncProposeAndWait
+	asyncStatus
 )
 
 type asyncResult struct {
-	ready raft.Ready
-	err   error
+	ready  raft.Ready
+	status RaftStatus
+	err    error
 }
 
 func OpenAsyncRaft(dir string, id uint64, peers []uint64, opts AsyncRaftOptions) (*AsyncRaft, error) {
@@ -110,6 +112,11 @@ func (d *AsyncRaft) ProposeAndWait(ctx context.Context, data []byte) (raft.Ready
 	return d.callContext(ctx, asyncRequest{kind: asyncProposeAndWait, data: append([]byte(nil), data...)})
 }
 
+func (d *AsyncRaft) Status() (RaftStatus, error) {
+	res, err := d.callResult(context.Background(), asyncRequest{kind: asyncStatus})
+	return res.status, err
+}
+
 func (d *AsyncRaft) Close() error {
 	d.closeOnce.Do(func() {
 		close(d.done)
@@ -123,21 +130,26 @@ func (d *AsyncRaft) call(req asyncRequest) (raft.Ready, error) {
 }
 
 func (d *AsyncRaft) callContext(ctx context.Context, req asyncRequest) (raft.Ready, error) {
+	res, err := d.callResult(ctx, req)
+	return res.ready, err
+}
+
+func (d *AsyncRaft) callResult(ctx context.Context, req asyncRequest) (asyncResult, error) {
 	req.resp = make(chan asyncResult, 1)
 	select {
 	case d.requests <- req:
 	case <-d.done:
-		return raft.Ready{}, ErrAsyncRaftClosed
+		return asyncResult{}, ErrAsyncRaftClosed
 	case <-ctx.Done():
-		return raft.Ready{}, ctx.Err()
+		return asyncResult{}, ctx.Err()
 	}
 	select {
 	case res := <-req.resp:
-		return res.ready, res.err
+		return res, res.err
 	case <-d.done:
-		return raft.Ready{}, ErrAsyncRaftClosed
+		return asyncResult{}, ErrAsyncRaftClosed
 	case <-ctx.Done():
-		return raft.Ready{}, ctx.Err()
+		return asyncResult{}, ctx.Err()
 	}
 }
 
@@ -157,6 +169,11 @@ func (d *AsyncRaft) run() {
 }
 
 func (d *AsyncRaft) handleRequest(req asyncRequest) {
+	if req.kind == asyncStatus {
+		status, err := d.rt.Status()
+		req.resp <- asyncResult{status: status, err: err}
+		return
+	}
 	if req.kind == asyncProposeAndWait {
 		d.handleProposeAndWait(req)
 		return

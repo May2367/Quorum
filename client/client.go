@@ -3,22 +3,32 @@ package client
 import (
 	"context"
 	"errors"
+	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	pb "quorum/proto"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 type Config struct {
-	Endpoints []string
-	Timeout   time.Duration
+	Endpoints     []string
+	NodeEndpoints map[uint64]string
+	Timeout       time.Duration
 }
 
 type Client struct {
-	endpoints []string
-	timeout   time.Duration
+	endpoints     []string
+	nodeEndpoints map[uint64]string
+	timeout       time.Duration
+
+	mu        sync.Mutex
+	preferred string
 }
 
 type CASResult struct {
@@ -32,7 +42,11 @@ func New(cfg Config) *Client {
 	if timeout == 0 {
 		timeout = 5 * time.Second
 	}
-	return &Client{endpoints: append([]string(nil), cfg.Endpoints...), timeout: timeout}
+	nodes := make(map[uint64]string, len(cfg.NodeEndpoints))
+	for id, endpoint := range cfg.NodeEndpoints {
+		nodes[id] = endpoint
+	}
+	return &Client{endpoints: append([]string(nil), cfg.Endpoints...), nodeEndpoints: nodes, timeout: timeout}
 }
 
 func (c *Client) Endpoints() []string {
@@ -94,11 +108,24 @@ func (c *Client) CompareAndSwap(ctx context.Context, key, expected, value, clien
 }
 
 func (c *Client) withClient(ctx context.Context, fn func(context.Context, pb.QuorumClient) error) error {
-	if len(c.endpoints) == 0 {
+	queue := c.orderedEndpoints()
+	if len(queue) == 0 {
 		return errors.New("no endpoints configured")
 	}
 	var lastErr error
-	for _, endpoint := range c.endpoints {
+	tried := map[string]bool{}
+	queued := map[string]bool{}
+	for _, endpoint := range queue {
+		queued[endpoint] = true
+	}
+	for len(queue) > 0 {
+		endpoint := queue[0]
+		queue = queue[1:]
+		queued[endpoint] = false
+		if tried[endpoint] {
+			continue
+		}
+		tried[endpoint] = true
 		callCtx, cancel := context.WithTimeout(ctx, c.timeout)
 		conn, err := grpc.NewClient(endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
@@ -110,13 +137,74 @@ func (c *Client) withClient(ctx context.Context, fn func(context.Context, pb.Quo
 		closeErr := conn.Close()
 		cancel()
 		if err == nil && closeErr == nil {
+			c.rememberEndpoint(endpoint)
 			return nil
 		}
 		if err != nil {
 			lastErr = err
+			if redirect := c.redirectEndpoint(err); redirect != "" && !tried[redirect] && !queued[redirect] {
+				queue = append([]string{redirect}, queue...)
+				queued[redirect] = true
+			}
 		} else {
 			lastErr = closeErr
 		}
 	}
 	return lastErr
+}
+
+func (c *Client) orderedEndpoints() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]string, 0, len(c.endpoints))
+	if c.preferred != "" {
+		out = append(out, c.preferred)
+	}
+	for _, endpoint := range c.endpoints {
+		if endpoint != c.preferred {
+			out = append(out, endpoint)
+		}
+	}
+	return out
+}
+
+func (c *Client) rememberEndpoint(endpoint string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.preferred = endpoint
+}
+
+func (c *Client) redirectEndpoint(err error) string {
+	st, ok := status.FromError(err)
+	if !ok || st.Code() != codes.Unavailable {
+		return ""
+	}
+	leaderID, ok := parseLeaderID(st.Message())
+	if !ok || leaderID == 0 {
+		return ""
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.nodeEndpoints[leaderID]
+}
+
+func parseLeaderID(message string) (uint64, bool) {
+	const marker = "leader_id="
+	idx := strings.Index(message, marker)
+	if idx < 0 {
+		return 0, false
+	}
+	rest := message[idx+len(marker):]
+	end := len(rest)
+	for i, r := range rest {
+		if r < '0' || r > '9' {
+			end = i
+			break
+		}
+	}
+	if end == 0 {
+		return 0, false
+	}
+	id, err := strconv.ParseUint(rest[:end], 10, 64)
+	return id, err == nil
 }

@@ -188,3 +188,32 @@ func TestKVServiceApplyCommittedAppliesExternalEntry(t *testing.T) {
 		t.Fatalf("get = %+v, want committed revision 1", got)
 	}
 }
+
+type statusRuntime struct {
+	status   RaftStatus
+	proposes int
+}
+
+func (r *statusRuntime) Propose([]byte) (raft.Ready, error) {
+	r.proposes++
+	return raft.Ready{}, nil
+}
+
+func (r *statusRuntime) Status() (RaftStatus, error) {
+	return r.status, nil
+}
+
+func TestKVServiceRejectsFollowerWriteWithLeaderHint(t *testing.T) {
+	rt := &statusRuntime{status: RaftStatus{ID: 1, Leader: 2, State: raft.Follower}}
+	svc := NewKVService(rt, statemachine.NewKV())
+	_, err := svc.Put(context.Background(), &pb.PutRequest{Key: "x", Value: "1", ClientId: "c1", Sequence: 1})
+	if status.Code(err) != codes.Unavailable {
+		t.Fatalf("put err = %v, want Unavailable", err)
+	}
+	if got := status.Convert(err).Message(); got != "not leader: leader_id=2" {
+		t.Fatalf("status message = %q, want leader hint", got)
+	}
+	if rt.proposes != 0 {
+		t.Fatalf("proposes = %d, want 0", rt.proposes)
+	}
+}
