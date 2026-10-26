@@ -56,6 +56,22 @@ total_cents=50200 expected_total_cents=50200 no_negative_balances=true
 escrow_balance=0
 ```
 
+## Benchmark Settlement Writes
+
+The benchmark command creates unique ledger accounts for each run, executes a fixed number of ledger transfers, and reports write throughput plus p50/p95/p99 latency.
+
+```sh
+go run ./cmd/settlement-bench -endpoints=127.0.0.1:9090 -transfers=1000 -concurrency=20
+```
+
+Example result table:
+
+| target | transfers | concurrency | throughput ops/sec | p50 ms | p99 ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| local single-node | 200 | 10 | 209.50 | 45.56 | 92.53 |
+| local three-process | TBD | TBD | TBD | TBD | TBD |
+| Docker three-node | needs Docker-capable environment | | | | |
+
 ## Run The Single-Node Server
 
 ```sh
