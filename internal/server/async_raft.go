@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"sync"
@@ -30,6 +31,12 @@ type AsyncRaft struct {
 	closeOnce   sync.Once
 	sender      ReadyMessageSender
 	sendTimeout time.Duration
+	waiters     []*proposalWaiter
+}
+
+type proposalWaiter struct {
+	data []byte
+	resp chan asyncResult
 }
 
 type asyncRequest struct {
@@ -45,6 +52,7 @@ const (
 	asyncTick asyncRequestKind = iota
 	asyncStep
 	asyncPropose
+	asyncProposeAndWait
 )
 
 type asyncResult struct {
@@ -91,6 +99,10 @@ func (d *AsyncRaft) Propose(data []byte) (raft.Ready, error) {
 	return d.call(asyncRequest{kind: asyncPropose, data: append([]byte(nil), data...)})
 }
 
+func (d *AsyncRaft) ProposeAndWait(ctx context.Context, data []byte) (raft.Ready, error) {
+	return d.callContext(ctx, asyncRequest{kind: asyncProposeAndWait, data: append([]byte(nil), data...)})
+}
+
 func (d *AsyncRaft) Close() error {
 	d.closeOnce.Do(func() {
 		close(d.done)
@@ -100,36 +112,65 @@ func (d *AsyncRaft) Close() error {
 }
 
 func (d *AsyncRaft) call(req asyncRequest) (raft.Ready, error) {
+	return d.callContext(context.Background(), req)
+}
+
+func (d *AsyncRaft) callContext(ctx context.Context, req asyncRequest) (raft.Ready, error) {
 	req.resp = make(chan asyncResult, 1)
 	select {
 	case d.requests <- req:
 	case <-d.done:
 		return raft.Ready{}, ErrAsyncRaftClosed
+	case <-ctx.Done():
+		return raft.Ready{}, ctx.Err()
 	}
 	select {
 	case res := <-req.resp:
 		return res.ready, res.err
 	case <-d.done:
 		return raft.Ready{}, ErrAsyncRaftClosed
+	case <-ctx.Done():
+		return raft.Ready{}, ctx.Err()
 	}
 }
 
 func (d *AsyncRaft) run() {
 	defer close(d.closed)
 	defer d.rt.Close()
+	defer d.failWaiters(ErrAsyncRaftClosed)
 
 	for {
 		select {
 		case <-d.done:
 			return
 		case req := <-d.requests:
-			rd, err := d.handle(req)
-			if err == nil {
-				d.dispatch(rd.Messages)
-			}
-			req.resp <- asyncResult{ready: rd, err: err}
+			d.handleRequest(req)
 		}
 	}
+}
+
+func (d *AsyncRaft) handleRequest(req asyncRequest) {
+	if req.kind == asyncProposeAndWait {
+		d.handleProposeAndWait(req)
+		return
+	}
+	rd, err := d.handle(req)
+	if err == nil {
+		d.afterReady(rd)
+	}
+	req.resp <- asyncResult{ready: rd, err: err}
+}
+
+func (d *AsyncRaft) handleProposeAndWait(req asyncRequest) {
+	waiter := &proposalWaiter{data: append([]byte(nil), req.data...), resp: req.resp}
+	d.waiters = append(d.waiters, waiter)
+	rd, err := d.handle(asyncRequest{kind: asyncPropose, data: req.data})
+	if err != nil {
+		d.removeWaiter(waiter)
+		req.resp <- asyncResult{err: err}
+		return
+	}
+	d.afterReady(rd)
 }
 
 func (d *AsyncRaft) handle(req asyncRequest) (raft.Ready, error) {
@@ -143,6 +184,56 @@ func (d *AsyncRaft) handle(req asyncRequest) (raft.Ready, error) {
 	default:
 		return raft.Ready{}, errors.New("unknown async raft request")
 	}
+}
+
+func (d *AsyncRaft) afterReady(rd raft.Ready) {
+	d.completeWaiters(rd)
+	d.dispatch(rd.Messages)
+}
+
+func (d *AsyncRaft) completeWaiters(rd raft.Ready) {
+	if len(d.waiters) == 0 || len(rd.Committed) == 0 {
+		return
+	}
+	remaining := d.waiters[:0]
+	for _, waiter := range d.waiters {
+		if readyHasData(rd, waiter.data) {
+			waiter.resp <- asyncResult{ready: rd}
+			continue
+		}
+		remaining = append(remaining, waiter)
+	}
+	d.waiters = remaining
+}
+
+func readyHasData(rd raft.Ready, data []byte) bool {
+	for _, ent := range rd.Committed {
+		if bytes.Equal(ent.Data, data) {
+			return true
+		}
+	}
+	return false
+}
+
+func (d *AsyncRaft) removeWaiter(target *proposalWaiter) bool {
+	removed := false
+	remaining := d.waiters[:0]
+	for _, waiter := range d.waiters {
+		if waiter == target {
+			removed = true
+			continue
+		}
+		remaining = append(remaining, waiter)
+	}
+	d.waiters = remaining
+	return removed
+}
+
+func (d *AsyncRaft) failWaiters(err error) {
+	for _, waiter := range d.waiters {
+		waiter.resp <- asyncResult{err: err}
+	}
+	d.waiters = nil
 }
 
 func (d *AsyncRaft) dispatch(messages []raft.Message) {

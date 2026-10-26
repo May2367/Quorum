@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"testing"
 
 	"quorum/internal/statemachine"
@@ -17,10 +18,10 @@ func TestReplayCommittedLogRestoresKVState(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := NewKVService(rt, statemachine.NewKV())
-	if _, err := svc.propose(statemachine.Command{Type: statemachine.CmdPut, Key: "a", Value: "1", ClientID: "c1", Sequence: 1}); err != nil {
+	if _, err := svc.propose(context.Background(), statemachine.Command{Type: statemachine.CmdPut, Key: "a", Value: "1", ClientID: "c1", Sequence: 1}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.propose(statemachine.Command{Type: statemachine.CmdCAS, Key: "a", Expect: "1", Value: "2", ClientID: "c1", Sequence: 2}); err != nil {
+	if _, err := svc.propose(context.Background(), statemachine.Command{Type: statemachine.CmdCAS, Key: "a", Expect: "1", Value: "2", ClientID: "c1", Sequence: 2}); err != nil {
 		t.Fatal(err)
 	}
 	if err := rt.Close(); err != nil {
@@ -51,7 +52,7 @@ func TestReplayCommittedLogRebuildsSessionDedup(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := NewKVService(rt, statemachine.NewKV())
-	first, err := svc.propose(statemachine.Command{Type: statemachine.CmdPut, Key: "dedup", Value: "once", ClientID: "c1", Sequence: 1})
+	first, err := svc.propose(context.Background(), statemachine.Command{Type: statemachine.CmdPut, Key: "dedup", Value: "once", ClientID: "c1", Sequence: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +91,7 @@ func TestReplayCommittedLogIgnoresUncommittedEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := NewKVService(rt, statemachine.NewKV())
-	_, err = svc.propose(statemachine.Command{Type: statemachine.CmdPut, Key: "uncommitted", Value: "x", ClientID: "c1", Sequence: 1})
+	_, err = svc.propose(context.Background(), statemachine.Command{Type: statemachine.CmdPut, Key: "uncommitted", Value: "x", ClientID: "c1", Sequence: 1})
 	if err == nil {
 		t.Fatal("expected proposal to remain uncommitted in a 3-node runtime with no peers")
 	}

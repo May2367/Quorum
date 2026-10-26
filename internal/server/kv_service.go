@@ -20,6 +20,10 @@ type raftRuntime interface {
 	Propose(data []byte) (raft.Ready, error)
 }
 
+type waitingRaftRuntime interface {
+	ProposeAndWait(context.Context, []byte) (raft.Ready, error)
+}
+
 type KVService struct {
 	pb.UnimplementedQuorumServer
 
@@ -43,11 +47,11 @@ func (s *KVService) Get(_ context.Context, req *pb.GetRequest) (*pb.GetResponse,
 	return &pb.GetResponse{Value: res.Value, Revision: res.Revision}, nil
 }
 
-func (s *KVService) Put(_ context.Context, req *pb.PutRequest) (*pb.PutResponse, error) {
+func (s *KVService) Put(ctx context.Context, req *pb.PutRequest) (*pb.PutResponse, error) {
 	if req.GetKey() == "" {
 		return nil, status.Error(codes.InvalidArgument, "key is required")
 	}
-	res, err := s.propose(statemachine.Command{
+	res, err := s.propose(ctx, statemachine.Command{
 		Type:     statemachine.CmdPut,
 		Key:      req.GetKey(),
 		Value:    req.GetValue(),
@@ -60,11 +64,11 @@ func (s *KVService) Put(_ context.Context, req *pb.PutRequest) (*pb.PutResponse,
 	return &pb.PutResponse{Revision: res.Revision}, nil
 }
 
-func (s *KVService) Delete(_ context.Context, req *pb.DeleteRequest) (*pb.DeleteResponse, error) {
+func (s *KVService) Delete(ctx context.Context, req *pb.DeleteRequest) (*pb.DeleteResponse, error) {
 	if req.GetKey() == "" {
 		return nil, status.Error(codes.InvalidArgument, "key is required")
 	}
-	res, err := s.propose(statemachine.Command{
+	res, err := s.propose(ctx, statemachine.Command{
 		Type:     statemachine.CmdDelete,
 		Key:      req.GetKey(),
 		ClientID: req.GetClientId(),
@@ -76,11 +80,11 @@ func (s *KVService) Delete(_ context.Context, req *pb.DeleteRequest) (*pb.Delete
 	return &pb.DeleteResponse{Revision: res.Revision}, nil
 }
 
-func (s *KVService) CompareAndSwap(_ context.Context, req *pb.CompareAndSwapRequest) (*pb.CompareAndSwapResponse, error) {
+func (s *KVService) CompareAndSwap(ctx context.Context, req *pb.CompareAndSwapRequest) (*pb.CompareAndSwapResponse, error) {
 	if req.GetKey() == "" {
 		return nil, status.Error(codes.InvalidArgument, "key is required")
 	}
-	res, err := s.propose(statemachine.Command{
+	res, err := s.propose(ctx, statemachine.Command{
 		Type:     statemachine.CmdCAS,
 		Key:      req.GetKey(),
 		Expect:   req.GetExpected(),
@@ -122,7 +126,7 @@ func (s *KVService) Watch(req *pb.WatchRequest, stream grpc.ServerStreamingServe
 	}
 }
 
-func (s *KVService) propose(cmd statemachine.Command) (statemachine.Result, error) {
+func (s *KVService) propose(ctx context.Context, cmd statemachine.Command) (statemachine.Result, error) {
 	payload, err := encodeCommand(cmd)
 	if err != nil {
 		return statemachine.Result{}, status.Error(codes.Internal, err.Error())
@@ -130,7 +134,7 @@ func (s *KVService) propose(cmd statemachine.Command) (statemachine.Result, erro
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	rd, err := s.raft.Propose(payload)
+	rd, err := s.proposeRaft(ctx, payload)
 	if err != nil {
 		return statemachine.Result{}, status.Error(codes.Internal, err.Error())
 	}
@@ -204,4 +208,11 @@ func statusError(err error) error {
 		return statemachine.ErrCompareFailed
 	}
 	return err
+}
+
+func (s *KVService) proposeRaft(ctx context.Context, payload []byte) (raft.Ready, error) {
+	if waiter, ok := s.raft.(waitingRaftRuntime); ok {
+		return waiter.ProposeAndWait(ctx, payload)
+	}
+	return s.raft.Propose(payload)
 }

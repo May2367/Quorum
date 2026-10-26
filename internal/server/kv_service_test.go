@@ -114,3 +114,29 @@ func newTestKVService(t *testing.T) (*KVService, func()) {
 		}
 	}
 }
+
+func TestKVServiceUsesAsyncProposalWaiter(t *testing.T) {
+	rt, err := OpenAsyncRaft(t.TempDir(), 1, []uint64{1}, AsyncRaftOptions{ElectionTimeout: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rt.Close()
+	if _, err := rt.Tick(); err != nil {
+		t.Fatal(err)
+	}
+	svc := NewKVService(rt, statemachine.NewKV())
+	put, err := svc.Put(context.Background(), &pb.PutRequest{Key: "x", Value: "1", ClientId: "c1", Sequence: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if put.GetRevision() != 1 {
+		t.Fatalf("revision = %d, want 1", put.GetRevision())
+	}
+	got, err := svc.Get(context.Background(), &pb.GetRequest{Key: "x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.GetValue() != "1" {
+		t.Fatalf("value = %q, want 1", got.GetValue())
+	}
+}

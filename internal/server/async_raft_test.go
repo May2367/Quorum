@@ -87,3 +87,34 @@ func (s *recordingSender) Send(_ context.Context, msg raft.Message) ([]raft.Mess
 	s.seen <- msg
 	return nil, nil
 }
+
+func TestAsyncRaftProposeAndWaitReturnsCommittedReady(t *testing.T) {
+	driver, err := OpenAsyncRaft(t.TempDir(), 1, []uint64{1}, AsyncRaftOptions{ElectionTimeout: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer driver.Close()
+	if _, err := driver.Tick(); err != nil {
+		t.Fatal(err)
+	}
+	rd, err := driver.ProposeAndWait(context.Background(), []byte("set x 1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rd.Committed) != 1 || string(rd.Committed[0].Data) != "set x 1" {
+		t.Fatalf("committed = %+v", rd.Committed)
+	}
+}
+
+func TestAsyncRaftProposeAndWaitHonorsContext(t *testing.T) {
+	driver, err := OpenAsyncRaft(t.TempDir(), 1, []uint64{1, 2, 3}, AsyncRaftOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer driver.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	if _, err := driver.ProposeAndWait(ctx, []byte("will not commit")); err == nil {
+		t.Fatal("expected context timeout")
+	}
+}
