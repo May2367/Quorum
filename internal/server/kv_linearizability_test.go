@@ -1,0 +1,125 @@
+package server
+
+import (
+	"context"
+	"sync"
+	"sync/atomic"
+	"testing"
+
+	"quorum/internal/linearizability"
+	pb "quorum/proto"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+)
+
+func TestKVServiceConcurrentHistoryIsLinearizable(t *testing.T) {
+	svc, closeFn := newTestKVService(t)
+	defer closeFn()
+
+	var clock atomic.Int64
+	var nextID atomic.Int64
+	var mu sync.Mutex
+	var history []linearizability.Operation
+	record := func(op linearizability.Operation) {
+		mu.Lock()
+		defer mu.Unlock()
+		history = append(history, op)
+	}
+
+	run := func(fn func() linearizability.Operation) {
+		op := fn()
+		op.ID = int(nextID.Add(1))
+		record(op)
+	}
+
+	var wg sync.WaitGroup
+	calls := []func() linearizability.Operation{
+		func() linearizability.Operation { return recordPut(&clock, svc, "acct", "0", "c1", 1) },
+		func() linearizability.Operation { return recordCAS(&clock, svc, "acct", "0", "10", "c2", 1) },
+		func() linearizability.Operation { return recordCAS(&clock, svc, "acct", "10", "20", "c3", 1) },
+		func() linearizability.Operation { return recordGet(&clock, svc, "acct") },
+		func() linearizability.Operation { return recordCAS(&clock, svc, "acct", "missing", "30", "c4", 1) },
+		func() linearizability.Operation { return recordDelete(&clock, svc, "acct", "c5", 1) },
+		func() linearizability.Operation { return recordGet(&clock, svc, "acct") },
+		func() linearizability.Operation { return recordPut(&clock, svc, "acct", "40", "c6", 1) },
+	}
+	for _, call := range calls {
+		wg.Add(1)
+		go func(call func() linearizability.Operation) {
+			defer wg.Done()
+			run(call)
+		}(call)
+	}
+	wg.Wait()
+
+	if err := linearizability.CheckKV(history); err != nil {
+		t.Fatalf("history is not linearizable: %v\nhistory=%+v", err, history)
+	}
+}
+
+func recordPut(clock *atomic.Int64, svc *KVService, key, value, clientID string, sequence uint64) linearizability.Operation {
+	start := clock.Add(1)
+	res, err := svc.Put(context.Background(), &pb.PutRequest{Key: key, Value: value, ClientId: clientID, Sequence: sequence})
+	end := clock.Add(1)
+	op := linearizability.Operation{Start: start, End: end, Kind: linearizability.OpPut, Key: key, Value: value}
+	if err != nil {
+		op.Err = codeName(err)
+		return op
+	}
+	op.OK = true
+	op.Revision = res.GetRevision()
+	return op
+}
+
+func recordGet(clock *atomic.Int64, svc *KVService, key string) linearizability.Operation {
+	start := clock.Add(1)
+	res, err := svc.Get(context.Background(), &pb.GetRequest{Key: key})
+	end := clock.Add(1)
+	op := linearizability.Operation{Start: start, End: end, Kind: linearizability.OpGet, Key: key}
+	if err != nil {
+		op.Err = codeName(err)
+		return op
+	}
+	op.OK = true
+	op.Current = res.GetValue()
+	op.Revision = res.GetRevision()
+	return op
+}
+
+func recordDelete(clock *atomic.Int64, svc *KVService, key, clientID string, sequence uint64) linearizability.Operation {
+	start := clock.Add(1)
+	res, err := svc.Delete(context.Background(), &pb.DeleteRequest{Key: key, ClientId: clientID, Sequence: sequence})
+	end := clock.Add(1)
+	op := linearizability.Operation{Start: start, End: end, Kind: linearizability.OpDelete, Key: key}
+	if err != nil {
+		op.Err = codeName(err)
+		return op
+	}
+	op.OK = true
+	op.Revision = res.GetRevision()
+	return op
+}
+
+func recordCAS(clock *atomic.Int64, svc *KVService, key, expect, value, clientID string, sequence uint64) linearizability.Operation {
+	start := clock.Add(1)
+	res, err := svc.CompareAndSwap(context.Background(), &pb.CompareAndSwapRequest{Key: key, Expected: expect, Value: value, ClientId: clientID, Sequence: sequence})
+	end := clock.Add(1)
+	op := linearizability.Operation{Start: start, End: end, Kind: linearizability.OpCAS, Key: key, Expect: expect, Value: value}
+	if err != nil {
+		op.Err = codeName(err)
+		return op
+	}
+	op.OK = true
+	op.Swapped = res.GetSwapped()
+	op.Current = res.GetCurrent()
+	op.Revision = res.GetRevision()
+	return op
+}
+
+func codeName(err error) string {
+	if status.Code(err) == codes.NotFound {
+		return "NotFound"
+	}
+	return status.Code(err).String()
+}
