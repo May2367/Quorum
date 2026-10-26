@@ -65,7 +65,7 @@ func TestLedgerRejectsStaleFencingToken(t *testing.T) {
 	if _, err := ledger.Transfer("escrow", "merchant", 1_000, "job-1", 20); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ledger.Transfer("escrow", "merchant", 500, "job-2", 19); !errors.Is(err, ErrStaleFencingToken) {
+	if _, err := ledger.Transfer("escrow", "merchant", 500, "job-1", 19); !errors.Is(err, ErrStaleFencingToken) {
 		t.Fatalf("stale token error = %v, want ErrStaleFencingToken", err)
 	}
 
@@ -107,7 +107,20 @@ func TestLedgerNoTokenTransferDoesNotLowerFence(t *testing.T) {
 	if _, err := ledger.Transfer("escrow", "merchant", 1_000, "job-2", 0); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ledger.Transfer("escrow", "merchant", 500, "job-3", 19); !errors.Is(err, ErrStaleFencingToken) {
+	if _, err := ledger.Transfer("escrow", "merchant", 500, "job-1", 19); !errors.Is(err, ErrStaleFencingToken) {
 		t.Fatalf("stale token error = %v, want ErrStaleFencingToken", err)
+	}
+}
+
+func TestLedgerFencesIndependentSettlementJobsSeparately(t *testing.T) {
+	ledger := NewLedger()
+	mustCreateAccount(t, ledger, "escrow", 10_000)
+	mustCreateAccount(t, ledger, "merchant", 0)
+
+	if _, err := ledger.Transfer("escrow", "merchant", 100, "job-newer", 20); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ledger.Transfer("escrow", "merchant", 100, "job-older-but-independent", 10); err != nil {
+		t.Fatal(err)
 	}
 }

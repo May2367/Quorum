@@ -280,6 +280,7 @@ const (
 	Lock_Acquire_FullMethodName   = "/quorum.v1.Lock/Acquire"
 	Lock_KeepAlive_FullMethodName = "/quorum.v1.Lock/KeepAlive"
 	Lock_Release_FullMethodName   = "/quorum.v1.Lock/Release"
+	Lock_Advance_FullMethodName   = "/quorum.v1.Lock/Advance"
 )
 
 // LockClient is the client API for Lock service.
@@ -289,6 +290,7 @@ type LockClient interface {
 	Acquire(ctx context.Context, in *AcquireLockRequest, opts ...grpc.CallOption) (*LockResponse, error)
 	KeepAlive(ctx context.Context, in *KeepAliveLockRequest, opts ...grpc.CallOption) (*LockResponse, error)
 	Release(ctx context.Context, in *ReleaseLockRequest, opts ...grpc.CallOption) (*ReleaseLockResponse, error)
+	Advance(ctx context.Context, in *AdvanceLockRequest, opts ...grpc.CallOption) (*AdvanceLockResponse, error)
 }
 
 type lockClient struct {
@@ -329,6 +331,16 @@ func (c *lockClient) Release(ctx context.Context, in *ReleaseLockRequest, opts .
 	return out, nil
 }
 
+func (c *lockClient) Advance(ctx context.Context, in *AdvanceLockRequest, opts ...grpc.CallOption) (*AdvanceLockResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdvanceLockResponse)
+	err := c.cc.Invoke(ctx, Lock_Advance_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // LockServer is the server API for Lock service.
 // All implementations must embed UnimplementedLockServer
 // for forward compatibility.
@@ -336,6 +348,7 @@ type LockServer interface {
 	Acquire(context.Context, *AcquireLockRequest) (*LockResponse, error)
 	KeepAlive(context.Context, *KeepAliveLockRequest) (*LockResponse, error)
 	Release(context.Context, *ReleaseLockRequest) (*ReleaseLockResponse, error)
+	Advance(context.Context, *AdvanceLockRequest) (*AdvanceLockResponse, error)
 	mustEmbedUnimplementedLockServer()
 }
 
@@ -354,6 +367,9 @@ func (UnimplementedLockServer) KeepAlive(context.Context, *KeepAliveLockRequest)
 }
 func (UnimplementedLockServer) Release(context.Context, *ReleaseLockRequest) (*ReleaseLockResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Release not implemented")
+}
+func (UnimplementedLockServer) Advance(context.Context, *AdvanceLockRequest) (*AdvanceLockResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Advance not implemented")
 }
 func (UnimplementedLockServer) mustEmbedUnimplementedLockServer() {}
 func (UnimplementedLockServer) testEmbeddedByValue()              {}
@@ -430,6 +446,24 @@ func _Lock_Release_Handler(srv interface{}, ctx context.Context, dec func(interf
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Lock_Advance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdvanceLockRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LockServer).Advance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Lock_Advance_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LockServer).Advance(ctx, req.(*AdvanceLockRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Lock_ServiceDesc is the grpc.ServiceDesc for Lock service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -448,6 +482,10 @@ var Lock_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Release",
 			Handler:    _Lock_Release_Handler,
+		},
+		{
+			MethodName: "Advance",
+			Handler:    _Lock_Advance_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

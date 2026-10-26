@@ -88,6 +88,16 @@ func main() {
 		}
 		fatalIf(c.ReleaseLock(ctx, args[1], args[2]))
 		fmt.Println("released=true")
+	case "lock-advance":
+		if len(args) != 2 {
+			usage()
+			os.Exit(2)
+		}
+		ticks, err := strconv.ParseUint(args[1], 10, 64)
+		fatalIf(err)
+		current, err := c.AdvanceLock(ctx, ticks)
+		fatalIf(err)
+		fmt.Printf("current_tick=%d\n", current)
 	case "ledger-create":
 		if len(args) != 3 {
 			usage()
@@ -151,6 +161,7 @@ func usage() {
 	fmt.Fprintf(os.Stderr, "  quorumctl [flags] lock-acquire <name> <holder> <ttl_ticks>\n")
 	fmt.Fprintf(os.Stderr, "  quorumctl [flags] lock-keepalive <name> <holder> <ttl_ticks>\n")
 	fmt.Fprintf(os.Stderr, "  quorumctl [flags] lock-release <name> <holder>\n")
+	fmt.Fprintf(os.Stderr, "  quorumctl [flags] lock-advance <ticks>\n")
 	fmt.Fprintf(os.Stderr, "  quorumctl [flags] ledger-create <account_id> <initial_cents>\n")
 	fmt.Fprintf(os.Stderr, "  quorumctl [flags] ledger-transfer <from> <to> <cents> <idempotency_key> <fencing_token>\n")
 	fmt.Fprintf(os.Stderr, "  quorumctl [flags] ledger-balance <account_id>\n")

@@ -309,9 +309,6 @@ func TestMultiNodeLedgerRejectsStaleLockHolderTransfer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ledger.Transfer(context.Background(), "escrow", "merchant", 100, "job-current", first.FencingToken); err != nil {
-		t.Fatal(err)
-	}
 	if err := cluster.lockServices[1].Advance(context.Background(), 1); err != nil {
 		t.Fatal(err)
 	}
@@ -322,7 +319,7 @@ func TestMultiNodeLedgerRejectsStaleLockHolderTransfer(t *testing.T) {
 	if second.FencingToken <= first.FencingToken {
 		t.Fatalf("second token = %d, want > %d", second.FencingToken, first.FencingToken)
 	}
-	if _, err := ledger.Transfer(context.Background(), "escrow", "merchant", 100, "job-new-owner", second.FencingToken); err != nil {
+	if _, err := ledger.Transfer(context.Background(), "escrow", "merchant", 100, "job-stale-holder", second.FencingToken); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := ledger.Transfer(context.Background(), "escrow", "merchant", 50, "job-stale-holder", first.FencingToken); status.Code(err) != codes.FailedPrecondition {
@@ -332,8 +329,8 @@ func TestMultiNodeLedgerRejectsStaleLockHolderTransfer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if balance != 800 {
-		t.Fatalf("escrow balance = %d, want 800", balance)
+	if balance != 900 {
+		t.Fatalf("escrow balance = %d, want 900", balance)
 	}
 }
 

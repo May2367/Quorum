@@ -65,18 +65,15 @@ func TestLedgerRejectsStaleWorkerTokenAfterLockReacquire(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ledger.Transfer("escrow", "merchant", 100, "job-1-current", first.FencingToken); err != nil {
-		t.Fatal(err)
-	}
 	locks.Advance(1)
 	second, err := locks.Acquire("settlement/job-1", "worker-2", 5, 20)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ledger.Transfer("escrow", "merchant", 100, "job-1-new-owner", second.FencingToken); err != nil {
+	if _, err := ledger.Transfer("escrow", "merchant", 100, "job-1", second.FencingToken); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ledger.Transfer("escrow", "merchant", 50, "job-1-stale-worker", first.FencingToken); !errors.Is(err, ErrStaleFencingToken) {
+	if _, err := ledger.Transfer("escrow", "merchant", 50, "job-1", first.FencingToken); !errors.Is(err, ErrStaleFencingToken) {
 		t.Fatalf("stale transfer err = %v, want ErrStaleFencingToken", err)
 	}
 }

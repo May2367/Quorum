@@ -92,6 +92,10 @@ func (s *LockService) Advance(ctx context.Context, ticks uint64) error {
 	return err
 }
 
+func (s *LockService) Tick() uint64 {
+	return s.locks.Tick()
+}
+
 func (s *LockService) ApplyCommitted(entries []raft.Entry) {
 	if len(entries) == 0 {
 		return

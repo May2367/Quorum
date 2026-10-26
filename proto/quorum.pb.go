@@ -873,6 +873,94 @@ func (*ReleaseLockResponse) Descriptor() ([]byte, []int) {
 	return file_proto_quorum_proto_rawDescGZIP(), []int{14}
 }
 
+type AdvanceLockRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ticks         uint64                 `protobuf:"varint,1,opt,name=ticks,proto3" json:"ticks,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AdvanceLockRequest) Reset() {
+	*x = AdvanceLockRequest{}
+	mi := &file_proto_quorum_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AdvanceLockRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AdvanceLockRequest) ProtoMessage() {}
+
+func (x *AdvanceLockRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_quorum_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AdvanceLockRequest.ProtoReflect.Descriptor instead.
+func (*AdvanceLockRequest) Descriptor() ([]byte, []int) {
+	return file_proto_quorum_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *AdvanceLockRequest) GetTicks() uint64 {
+	if x != nil {
+		return x.Ticks
+	}
+	return 0
+}
+
+type AdvanceLockResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CurrentTick   uint64                 `protobuf:"varint,1,opt,name=current_tick,json=currentTick,proto3" json:"current_tick,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AdvanceLockResponse) Reset() {
+	*x = AdvanceLockResponse{}
+	mi := &file_proto_quorum_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AdvanceLockResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AdvanceLockResponse) ProtoMessage() {}
+
+func (x *AdvanceLockResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_quorum_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AdvanceLockResponse.ProtoReflect.Descriptor instead.
+func (*AdvanceLockResponse) Descriptor() ([]byte, []int) {
+	return file_proto_quorum_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *AdvanceLockResponse) GetCurrentTick() uint64 {
+	if x != nil {
+		return x.CurrentTick
+	}
+	return 0
+}
+
 type CreateAccountRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	AccountId     string                 `protobuf:"bytes,1,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
@@ -883,7 +971,7 @@ type CreateAccountRequest struct {
 
 func (x *CreateAccountRequest) Reset() {
 	*x = CreateAccountRequest{}
-	mi := &file_proto_quorum_proto_msgTypes[15]
+	mi := &file_proto_quorum_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -895,7 +983,7 @@ func (x *CreateAccountRequest) String() string {
 func (*CreateAccountRequest) ProtoMessage() {}
 
 func (x *CreateAccountRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_quorum_proto_msgTypes[15]
+	mi := &file_proto_quorum_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -908,7 +996,7 @@ func (x *CreateAccountRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateAccountRequest.ProtoReflect.Descriptor instead.
 func (*CreateAccountRequest) Descriptor() ([]byte, []int) {
-	return file_proto_quorum_proto_rawDescGZIP(), []int{15}
+	return file_proto_quorum_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *CreateAccountRequest) GetAccountId() string {
@@ -933,7 +1021,7 @@ type CreateAccountResponse struct {
 
 func (x *CreateAccountResponse) Reset() {
 	*x = CreateAccountResponse{}
-	mi := &file_proto_quorum_proto_msgTypes[16]
+	mi := &file_proto_quorum_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -945,7 +1033,7 @@ func (x *CreateAccountResponse) String() string {
 func (*CreateAccountResponse) ProtoMessage() {}
 
 func (x *CreateAccountResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_quorum_proto_msgTypes[16]
+	mi := &file_proto_quorum_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -958,7 +1046,7 @@ func (x *CreateAccountResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateAccountResponse.ProtoReflect.Descriptor instead.
 func (*CreateAccountResponse) Descriptor() ([]byte, []int) {
-	return file_proto_quorum_proto_rawDescGZIP(), []int{16}
+	return file_proto_quorum_proto_rawDescGZIP(), []int{18}
 }
 
 type TransferRequest struct {
@@ -974,7 +1062,7 @@ type TransferRequest struct {
 
 func (x *TransferRequest) Reset() {
 	*x = TransferRequest{}
-	mi := &file_proto_quorum_proto_msgTypes[17]
+	mi := &file_proto_quorum_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -986,7 +1074,7 @@ func (x *TransferRequest) String() string {
 func (*TransferRequest) ProtoMessage() {}
 
 func (x *TransferRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_quorum_proto_msgTypes[17]
+	mi := &file_proto_quorum_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -999,7 +1087,7 @@ func (x *TransferRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransferRequest.ProtoReflect.Descriptor instead.
 func (*TransferRequest) Descriptor() ([]byte, []int) {
-	return file_proto_quorum_proto_rawDescGZIP(), []int{17}
+	return file_proto_quorum_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *TransferRequest) GetFromAccount() string {
@@ -1049,7 +1137,7 @@ type TransferResponse struct {
 
 func (x *TransferResponse) Reset() {
 	*x = TransferResponse{}
-	mi := &file_proto_quorum_proto_msgTypes[18]
+	mi := &file_proto_quorum_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1061,7 +1149,7 @@ func (x *TransferResponse) String() string {
 func (*TransferResponse) ProtoMessage() {}
 
 func (x *TransferResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_quorum_proto_msgTypes[18]
+	mi := &file_proto_quorum_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1074,7 +1162,7 @@ func (x *TransferResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransferResponse.ProtoReflect.Descriptor instead.
 func (*TransferResponse) Descriptor() ([]byte, []int) {
-	return file_proto_quorum_proto_rawDescGZIP(), []int{18}
+	return file_proto_quorum_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *TransferResponse) GetFromBalance() int64 {
@@ -1114,7 +1202,7 @@ type GetBalanceRequest struct {
 
 func (x *GetBalanceRequest) Reset() {
 	*x = GetBalanceRequest{}
-	mi := &file_proto_quorum_proto_msgTypes[19]
+	mi := &file_proto_quorum_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1126,7 +1214,7 @@ func (x *GetBalanceRequest) String() string {
 func (*GetBalanceRequest) ProtoMessage() {}
 
 func (x *GetBalanceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_quorum_proto_msgTypes[19]
+	mi := &file_proto_quorum_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1139,7 +1227,7 @@ func (x *GetBalanceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBalanceRequest.ProtoReflect.Descriptor instead.
 func (*GetBalanceRequest) Descriptor() ([]byte, []int) {
-	return file_proto_quorum_proto_rawDescGZIP(), []int{19}
+	return file_proto_quorum_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *GetBalanceRequest) GetAccountId() string {
@@ -1158,7 +1246,7 @@ type GetBalanceResponse struct {
 
 func (x *GetBalanceResponse) Reset() {
 	*x = GetBalanceResponse{}
-	mi := &file_proto_quorum_proto_msgTypes[20]
+	mi := &file_proto_quorum_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1170,7 +1258,7 @@ func (x *GetBalanceResponse) String() string {
 func (*GetBalanceResponse) ProtoMessage() {}
 
 func (x *GetBalanceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_quorum_proto_msgTypes[20]
+	mi := &file_proto_quorum_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1183,7 +1271,7 @@ func (x *GetBalanceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBalanceResponse.ProtoReflect.Descriptor instead.
 func (*GetBalanceResponse) Descriptor() ([]byte, []int) {
-	return file_proto_quorum_proto_rawDescGZIP(), []int{20}
+	return file_proto_quorum_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *GetBalanceResponse) GetBalance() int64 {
@@ -1204,7 +1292,7 @@ type RaftEntry struct {
 
 func (x *RaftEntry) Reset() {
 	*x = RaftEntry{}
-	mi := &file_proto_quorum_proto_msgTypes[21]
+	mi := &file_proto_quorum_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1216,7 +1304,7 @@ func (x *RaftEntry) String() string {
 func (*RaftEntry) ProtoMessage() {}
 
 func (x *RaftEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_quorum_proto_msgTypes[21]
+	mi := &file_proto_quorum_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1229,7 +1317,7 @@ func (x *RaftEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RaftEntry.ProtoReflect.Descriptor instead.
 func (*RaftEntry) Descriptor() ([]byte, []int) {
-	return file_proto_quorum_proto_rawDescGZIP(), []int{21}
+	return file_proto_quorum_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *RaftEntry) GetIndex() uint64 {
@@ -1272,7 +1360,7 @@ type RaftMessage struct {
 
 func (x *RaftMessage) Reset() {
 	*x = RaftMessage{}
-	mi := &file_proto_quorum_proto_msgTypes[22]
+	mi := &file_proto_quorum_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1284,7 +1372,7 @@ func (x *RaftMessage) String() string {
 func (*RaftMessage) ProtoMessage() {}
 
 func (x *RaftMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_quorum_proto_msgTypes[22]
+	mi := &file_proto_quorum_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1297,7 +1385,7 @@ func (x *RaftMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RaftMessage.ProtoReflect.Descriptor instead.
 func (*RaftMessage) Descriptor() ([]byte, []int) {
-	return file_proto_quorum_proto_rawDescGZIP(), []int{22}
+	return file_proto_quorum_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *RaftMessage) GetType() uint32 {
@@ -1386,7 +1474,7 @@ type RaftMessages struct {
 
 func (x *RaftMessages) Reset() {
 	*x = RaftMessages{}
-	mi := &file_proto_quorum_proto_msgTypes[23]
+	mi := &file_proto_quorum_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1398,7 +1486,7 @@ func (x *RaftMessages) String() string {
 func (*RaftMessages) ProtoMessage() {}
 
 func (x *RaftMessages) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_quorum_proto_msgTypes[23]
+	mi := &file_proto_quorum_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1411,7 +1499,7 @@ func (x *RaftMessages) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RaftMessages.ProtoReflect.Descriptor instead.
 func (*RaftMessages) Descriptor() ([]byte, []int) {
-	return file_proto_quorum_proto_rawDescGZIP(), []int{23}
+	return file_proto_quorum_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *RaftMessages) GetMessages() []*RaftMessage {
@@ -1483,7 +1571,11 @@ const file_proto_quorum_proto_rawDesc = "" +
 	"\n" +
 	"expires_at\x18\x04 \x01(\x04R\texpiresAt\x12\x1a\n" +
 	"\bacquired\x18\x05 \x01(\bR\bacquired\"\x15\n" +
-	"\x13ReleaseLockResponse\"Z\n" +
+	"\x13ReleaseLockResponse\"*\n" +
+	"\x12AdvanceLockRequest\x12\x14\n" +
+	"\x05ticks\x18\x01 \x01(\x04R\x05ticks\"8\n" +
+	"\x13AdvanceLockResponse\x12!\n" +
+	"\fcurrent_tick\x18\x01 \x01(\x04R\vcurrentTick\"Z\n" +
 	"\x14CreateAccountRequest\x12\x1d\n" +
 	"\n" +
 	"account_id\x18\x01 \x01(\tR\taccountId\x12#\n" +
@@ -1532,11 +1624,12 @@ const file_proto_quorum_proto_rawDesc = "" +
 	"\x03Put\x12\x15.quorum.v1.PutRequest\x1a\x16.quorum.v1.PutResponse\x12=\n" +
 	"\x06Delete\x12\x18.quorum.v1.DeleteRequest\x1a\x19.quorum.v1.DeleteResponse\x12U\n" +
 	"\x0eCompareAndSwap\x12 .quorum.v1.CompareAndSwapRequest\x1a!.quorum.v1.CompareAndSwapResponse\x129\n" +
-	"\x05Watch\x12\x17.quorum.v1.WatchRequest\x1a\x15.quorum.v1.WatchEvent0\x012\xda\x01\n" +
+	"\x05Watch\x12\x17.quorum.v1.WatchRequest\x1a\x15.quorum.v1.WatchEvent0\x012\xa4\x02\n" +
 	"\x04Lock\x12A\n" +
 	"\aAcquire\x12\x1d.quorum.v1.AcquireLockRequest\x1a\x17.quorum.v1.LockResponse\x12E\n" +
 	"\tKeepAlive\x12\x1f.quorum.v1.KeepAliveLockRequest\x1a\x17.quorum.v1.LockResponse\x12H\n" +
-	"\aRelease\x12\x1d.quorum.v1.ReleaseLockRequest\x1a\x1e.quorum.v1.ReleaseLockResponse2\xec\x01\n" +
+	"\aRelease\x12\x1d.quorum.v1.ReleaseLockRequest\x1a\x1e.quorum.v1.ReleaseLockResponse\x12H\n" +
+	"\aAdvance\x12\x1d.quorum.v1.AdvanceLockRequest\x1a\x1e.quorum.v1.AdvanceLockResponse2\xec\x01\n" +
 	"\x06Ledger\x12R\n" +
 	"\rCreateAccount\x12\x1f.quorum.v1.CreateAccountRequest\x1a .quorum.v1.CreateAccountResponse\x12C\n" +
 	"\bTransfer\x12\x1a.quorum.v1.TransferRequest\x1a\x1b.quorum.v1.TransferResponse\x12I\n" +
@@ -1557,7 +1650,7 @@ func file_proto_quorum_proto_rawDescGZIP() []byte {
 	return file_proto_quorum_proto_rawDescData
 }
 
-var file_proto_quorum_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
+var file_proto_quorum_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
 var file_proto_quorum_proto_goTypes = []any{
 	(*GetRequest)(nil),             // 0: quorum.v1.GetRequest
 	(*GetResponse)(nil),            // 1: quorum.v1.GetResponse
@@ -1574,19 +1667,21 @@ var file_proto_quorum_proto_goTypes = []any{
 	(*ReleaseLockRequest)(nil),     // 12: quorum.v1.ReleaseLockRequest
 	(*LockResponse)(nil),           // 13: quorum.v1.LockResponse
 	(*ReleaseLockResponse)(nil),    // 14: quorum.v1.ReleaseLockResponse
-	(*CreateAccountRequest)(nil),   // 15: quorum.v1.CreateAccountRequest
-	(*CreateAccountResponse)(nil),  // 16: quorum.v1.CreateAccountResponse
-	(*TransferRequest)(nil),        // 17: quorum.v1.TransferRequest
-	(*TransferResponse)(nil),       // 18: quorum.v1.TransferResponse
-	(*GetBalanceRequest)(nil),      // 19: quorum.v1.GetBalanceRequest
-	(*GetBalanceResponse)(nil),     // 20: quorum.v1.GetBalanceResponse
-	(*RaftEntry)(nil),              // 21: quorum.v1.RaftEntry
-	(*RaftMessage)(nil),            // 22: quorum.v1.RaftMessage
-	(*RaftMessages)(nil),           // 23: quorum.v1.RaftMessages
+	(*AdvanceLockRequest)(nil),     // 15: quorum.v1.AdvanceLockRequest
+	(*AdvanceLockResponse)(nil),    // 16: quorum.v1.AdvanceLockResponse
+	(*CreateAccountRequest)(nil),   // 17: quorum.v1.CreateAccountRequest
+	(*CreateAccountResponse)(nil),  // 18: quorum.v1.CreateAccountResponse
+	(*TransferRequest)(nil),        // 19: quorum.v1.TransferRequest
+	(*TransferResponse)(nil),       // 20: quorum.v1.TransferResponse
+	(*GetBalanceRequest)(nil),      // 21: quorum.v1.GetBalanceRequest
+	(*GetBalanceResponse)(nil),     // 22: quorum.v1.GetBalanceResponse
+	(*RaftEntry)(nil),              // 23: quorum.v1.RaftEntry
+	(*RaftMessage)(nil),            // 24: quorum.v1.RaftMessage
+	(*RaftMessages)(nil),           // 25: quorum.v1.RaftMessages
 }
 var file_proto_quorum_proto_depIdxs = []int32{
-	21, // 0: quorum.v1.RaftMessage.entries:type_name -> quorum.v1.RaftEntry
-	22, // 1: quorum.v1.RaftMessages.messages:type_name -> quorum.v1.RaftMessage
+	23, // 0: quorum.v1.RaftMessage.entries:type_name -> quorum.v1.RaftEntry
+	24, // 1: quorum.v1.RaftMessages.messages:type_name -> quorum.v1.RaftMessage
 	0,  // 2: quorum.v1.Quorum.Get:input_type -> quorum.v1.GetRequest
 	2,  // 3: quorum.v1.Quorum.Put:input_type -> quorum.v1.PutRequest
 	4,  // 4: quorum.v1.Quorum.Delete:input_type -> quorum.v1.DeleteRequest
@@ -1595,24 +1690,26 @@ var file_proto_quorum_proto_depIdxs = []int32{
 	10, // 7: quorum.v1.Lock.Acquire:input_type -> quorum.v1.AcquireLockRequest
 	11, // 8: quorum.v1.Lock.KeepAlive:input_type -> quorum.v1.KeepAliveLockRequest
 	12, // 9: quorum.v1.Lock.Release:input_type -> quorum.v1.ReleaseLockRequest
-	15, // 10: quorum.v1.Ledger.CreateAccount:input_type -> quorum.v1.CreateAccountRequest
-	17, // 11: quorum.v1.Ledger.Transfer:input_type -> quorum.v1.TransferRequest
-	19, // 12: quorum.v1.Ledger.GetBalance:input_type -> quorum.v1.GetBalanceRequest
-	22, // 13: quorum.v1.RaftPeer.Send:input_type -> quorum.v1.RaftMessage
-	1,  // 14: quorum.v1.Quorum.Get:output_type -> quorum.v1.GetResponse
-	3,  // 15: quorum.v1.Quorum.Put:output_type -> quorum.v1.PutResponse
-	5,  // 16: quorum.v1.Quorum.Delete:output_type -> quorum.v1.DeleteResponse
-	7,  // 17: quorum.v1.Quorum.CompareAndSwap:output_type -> quorum.v1.CompareAndSwapResponse
-	9,  // 18: quorum.v1.Quorum.Watch:output_type -> quorum.v1.WatchEvent
-	13, // 19: quorum.v1.Lock.Acquire:output_type -> quorum.v1.LockResponse
-	13, // 20: quorum.v1.Lock.KeepAlive:output_type -> quorum.v1.LockResponse
-	14, // 21: quorum.v1.Lock.Release:output_type -> quorum.v1.ReleaseLockResponse
-	16, // 22: quorum.v1.Ledger.CreateAccount:output_type -> quorum.v1.CreateAccountResponse
-	18, // 23: quorum.v1.Ledger.Transfer:output_type -> quorum.v1.TransferResponse
-	20, // 24: quorum.v1.Ledger.GetBalance:output_type -> quorum.v1.GetBalanceResponse
-	23, // 25: quorum.v1.RaftPeer.Send:output_type -> quorum.v1.RaftMessages
-	14, // [14:26] is the sub-list for method output_type
-	2,  // [2:14] is the sub-list for method input_type
+	15, // 10: quorum.v1.Lock.Advance:input_type -> quorum.v1.AdvanceLockRequest
+	17, // 11: quorum.v1.Ledger.CreateAccount:input_type -> quorum.v1.CreateAccountRequest
+	19, // 12: quorum.v1.Ledger.Transfer:input_type -> quorum.v1.TransferRequest
+	21, // 13: quorum.v1.Ledger.GetBalance:input_type -> quorum.v1.GetBalanceRequest
+	24, // 14: quorum.v1.RaftPeer.Send:input_type -> quorum.v1.RaftMessage
+	1,  // 15: quorum.v1.Quorum.Get:output_type -> quorum.v1.GetResponse
+	3,  // 16: quorum.v1.Quorum.Put:output_type -> quorum.v1.PutResponse
+	5,  // 17: quorum.v1.Quorum.Delete:output_type -> quorum.v1.DeleteResponse
+	7,  // 18: quorum.v1.Quorum.CompareAndSwap:output_type -> quorum.v1.CompareAndSwapResponse
+	9,  // 19: quorum.v1.Quorum.Watch:output_type -> quorum.v1.WatchEvent
+	13, // 20: quorum.v1.Lock.Acquire:output_type -> quorum.v1.LockResponse
+	13, // 21: quorum.v1.Lock.KeepAlive:output_type -> quorum.v1.LockResponse
+	14, // 22: quorum.v1.Lock.Release:output_type -> quorum.v1.ReleaseLockResponse
+	16, // 23: quorum.v1.Lock.Advance:output_type -> quorum.v1.AdvanceLockResponse
+	18, // 24: quorum.v1.Ledger.CreateAccount:output_type -> quorum.v1.CreateAccountResponse
+	20, // 25: quorum.v1.Ledger.Transfer:output_type -> quorum.v1.TransferResponse
+	22, // 26: quorum.v1.Ledger.GetBalance:output_type -> quorum.v1.GetBalanceResponse
+	25, // 27: quorum.v1.RaftPeer.Send:output_type -> quorum.v1.RaftMessages
+	15, // [15:28] is the sub-list for method output_type
+	2,  // [2:15] is the sub-list for method input_type
 	2,  // [2:2] is the sub-list for extension type_name
 	2,  // [2:2] is the sub-list for extension extendee
 	0,  // [0:2] is the sub-list for field type_name
@@ -1629,7 +1726,7 @@ func file_proto_quorum_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_quorum_proto_rawDesc), len(file_proto_quorum_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   24,
+			NumMessages:   26,
 			NumExtensions: 0,
 			NumServices:   4,
 		},

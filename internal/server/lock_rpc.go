@@ -39,6 +39,13 @@ func (s *LockRPCServer) Release(ctx context.Context, req *pb.ReleaseLockRequest)
 	return &pb.ReleaseLockResponse{}, nil
 }
 
+func (s *LockRPCServer) Advance(ctx context.Context, req *pb.AdvanceLockRequest) (*pb.AdvanceLockResponse, error) {
+	if err := s.locks.Advance(ctx, req.GetTicks()); err != nil {
+		return nil, err
+	}
+	return &pb.AdvanceLockResponse{CurrentTick: s.locks.Tick()}, nil
+}
+
 func lockResponse(res statemachine.LockResult) *pb.LockResponse {
 	return &pb.LockResponse{
 		Name:         res.Name,

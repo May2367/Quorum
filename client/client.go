@@ -155,6 +155,19 @@ func (c *Client) ReleaseLock(ctx context.Context, name, holder string) error {
 	})
 }
 
+func (c *Client) AdvanceLock(ctx context.Context, ticks uint64) (uint64, error) {
+	var current uint64
+	err := c.withLockClient(ctx, func(ctx context.Context, lc pb.LockClient) error {
+		res, err := lc.Advance(ctx, &pb.AdvanceLockRequest{Ticks: ticks})
+		if err != nil {
+			return err
+		}
+		current = res.GetCurrentTick()
+		return nil
+	})
+	return current, err
+}
+
 func (c *Client) CreateAccount(ctx context.Context, accountID string, initialCents int64) error {
 	return c.withLedgerClient(ctx, func(ctx context.Context, lc pb.LedgerClient) error {
 		_, err := lc.CreateAccount(ctx, &pb.CreateAccountRequest{AccountId: accountID, InitialCents: initialCents})

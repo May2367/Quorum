@@ -66,16 +66,13 @@ func (l *Ledger) Transfer(from, to string, cents int64, idempotencyKey string, f
 	if cents <= 0 {
 		return TransferResult{}, ErrInvalidAmount
 	}
+	if err := l.checkFenceLocked(idempotencyKey, fencingToken); err != nil {
+		return TransferResult{}, err
+	}
 	if idempotencyKey != "" {
 		if prev, ok := l.transfers[idempotencyKey]; ok {
 			return prev, ErrDuplicateTransfer
 		}
-	}
-	if err := l.checkFenceLocked(from, fencingToken); err != nil {
-		return TransferResult{}, err
-	}
-	if err := l.checkFenceLocked(to, fencingToken); err != nil {
-		return TransferResult{}, err
 	}
 
 	fromBalance, ok := l.accounts[from]
@@ -95,9 +92,8 @@ func (l *Ledger) Transfer(from, to string, cents int64, idempotencyKey string, f
 	toBalance += cents
 	l.accounts[from] = fromBalance
 	l.accounts[to] = toBalance
-	if fencingToken > 0 {
-		l.fences[from] = fencingToken
-		l.fences[to] = fencingToken
+	if idempotencyKey != "" && fencingToken > 0 {
+		l.fences[idempotencyKey] = fencingToken
 	}
 
 	res := TransferResult{
@@ -138,11 +134,11 @@ func (l *Ledger) Snapshot() LedgerSnapshot {
 	}
 }
 
-func (l *Ledger) checkFenceLocked(accountID string, token uint64) error {
-	if token == 0 {
+func (l *Ledger) checkFenceLocked(resourceID string, token uint64) error {
+	if resourceID == "" || token == 0 {
 		return nil
 	}
-	if current, ok := l.fences[accountID]; ok && token < current {
+	if current, ok := l.fences[resourceID]; ok && token < current {
 		return ErrStaleFencingToken
 	}
 	return nil

@@ -16,6 +16,7 @@ service Lock {
   rpc Acquire(AcquireLockRequest) returns (LockResponse);
   rpc KeepAlive(KeepAliveLockRequest) returns (LockResponse);
   rpc Release(ReleaseLockRequest) returns (ReleaseLockResponse);
+  rpc Advance(AdvanceLockRequest) returns (AdvanceLockResponse);
 }
 
 service Ledger {
@@ -110,6 +111,14 @@ message LockResponse {
 }
 
 message ReleaseLockResponse {}
+
+message AdvanceLockRequest {
+  uint64 ticks = 1;
+}
+
+message AdvanceLockResponse {
+  uint64 current_tick = 1;
+}
 
 message CreateAccountRequest {
   string account_id = 1;
