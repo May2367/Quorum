@@ -5,15 +5,19 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"quorum/client"
+	"quorum/internal/linearizability"
 	"quorum/internal/raft"
 	"quorum/internal/statemachine"
 	pb "quorum/proto"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type directRaftSender struct {
@@ -117,6 +121,39 @@ func (c *multiNodeKVCluster) ElectLeader(t *testing.T, id uint64) {
 	t.Fatalf("node %d did not become leader", id)
 }
 
+func (c *multiNodeKVCluster) WaitLeaderKnown(t *testing.T, leader uint64) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		known := true
+		for id, node := range c.nodes {
+			st, err := node.Status()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if id == leader {
+				if !st.IsLeader() {
+					known = false
+					break
+				}
+				continue
+			}
+			if st.Leader != leader {
+				known = false
+				break
+			}
+		}
+		if known {
+			return
+		}
+		if _, err := c.nodes[leader].Tick(); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("not all nodes learned leader %d", leader)
+}
+
 func (c *multiNodeKVCluster) WaitValueOnAll(t *testing.T, key, value string) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
@@ -163,6 +200,7 @@ func serveKVService(t *testing.T, svc *KVService, servers *[]*grpc.Server) strin
 func TestMultiNodeKVClientRedirectReplicatesWrite(t *testing.T) {
 	cluster := newMultiNodeKVCluster(t)
 	cluster.ElectLeader(t, 1)
+	cluster.WaitLeaderKnown(t, 1)
 
 	c := client.New(client.Config{
 		Endpoints:     []string{cluster.addrs[2], cluster.addrs[3]},
@@ -190,4 +228,119 @@ func TestMultiNodeKVClientRedirectReplicatesWrite(t *testing.T) {
 	if value != "claimed" || readRevision != 1 {
 		t.Fatalf("get value=%q revision=%d, want claimed revision 1", value, readRevision)
 	}
+}
+
+func TestMultiNodeKVClientHistoryIsLinearizable(t *testing.T) {
+	cluster := newMultiNodeKVCluster(t)
+	cluster.ElectLeader(t, 1)
+	cluster.WaitLeaderKnown(t, 1)
+
+	seed := client.New(client.Config{Endpoints: []string{cluster.addrs[2], cluster.addrs[3], cluster.addrs[1]}, NodeEndpoints: cluster.addrs, Timeout: time.Second})
+	if revision, err := seed.Put(context.Background(), "acct", "0", "mn-seed", 1); err != nil {
+		t.Fatal(err)
+	} else if revision != 1 {
+		t.Fatalf("seed revision = %d, want 1", revision)
+	}
+	cluster.WaitValueOnAll(t, "acct", "0")
+
+	clients := []*client.Client{
+		client.New(client.Config{Endpoints: []string{cluster.addrs[2], cluster.addrs[3], cluster.addrs[1]}, NodeEndpoints: cluster.addrs, Timeout: time.Second}),
+		client.New(client.Config{Endpoints: []string{cluster.addrs[3], cluster.addrs[2], cluster.addrs[1]}, NodeEndpoints: cluster.addrs, Timeout: time.Second}),
+		client.New(client.Config{Endpoints: []string{cluster.addrs[1], cluster.addrs[2], cluster.addrs[3]}, NodeEndpoints: cluster.addrs, Timeout: time.Second}),
+	}
+	var clock atomic.Int64
+	ops := []func() linearizability.Operation{
+		func() linearizability.Operation { return recordClientGet(&clock, clients[0], "acct") },
+		func() linearizability.Operation {
+			return recordClientCAS(&clock, clients[1], "acct", "0", "10", "mn-c1", 1)
+		},
+		func() linearizability.Operation { return recordClientGet(&clock, clients[2], "acct") },
+		func() linearizability.Operation {
+			return recordClientCAS(&clock, clients[0], "acct", "10", "20", "mn-c2", 1)
+		},
+	}
+	var wg sync.WaitGroup
+	history := []linearizability.Operation{{ID: 1, Start: 0, End: 0, Kind: linearizability.OpPut, Key: "acct", Value: "0", OK: true, Revision: 1}}
+	recorded := make([]linearizability.Operation, len(ops))
+	for i, op := range ops {
+		i, op := i, op
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			entry := op()
+			entry.ID = i + 2
+			recorded[i] = entry
+		}()
+	}
+	wg.Wait()
+	history = append(history, recorded...)
+	if err := linearizability.CheckKV(history); err != nil {
+		t.Fatalf("history is not linearizable: %v\nhistory=%+v", err, history)
+	}
+}
+
+func recordClientPut(clock *atomic.Int64, c *client.Client, key, value, clientID string, sequence uint64) linearizability.Operation {
+	start := clock.Add(1)
+	revision, err := c.Put(context.Background(), key, value, clientID, sequence)
+	end := clock.Add(1)
+	op := linearizability.Operation{Start: start, End: end, Kind: linearizability.OpPut, Key: key, Value: value}
+	if err != nil {
+		op.Err = clientCodeName(err)
+		return op
+	}
+	op.OK = true
+	op.Revision = revision
+	return op
+}
+
+func recordClientGet(clock *atomic.Int64, c *client.Client, key string) linearizability.Operation {
+	start := clock.Add(1)
+	value, revision, err := c.Get(context.Background(), key)
+	end := clock.Add(1)
+	op := linearizability.Operation{Start: start, End: end, Kind: linearizability.OpGet, Key: key}
+	if err != nil {
+		op.Err = clientCodeName(err)
+		return op
+	}
+	op.OK = true
+	op.Current = value
+	op.Revision = revision
+	return op
+}
+
+func recordClientCAS(clock *atomic.Int64, c *client.Client, key, expect, value, clientID string, sequence uint64) linearizability.Operation {
+	start := clock.Add(1)
+	res, err := c.CompareAndSwap(context.Background(), key, expect, value, clientID, sequence)
+	end := clock.Add(1)
+	op := linearizability.Operation{Start: start, End: end, Kind: linearizability.OpCAS, Key: key, Expect: expect, Value: value}
+	if err != nil {
+		op.Err = clientCodeName(err)
+		return op
+	}
+	op.OK = true
+	op.Swapped = res.Swapped
+	op.Current = res.Current
+	op.Revision = res.Revision
+	return op
+}
+
+func recordClientDelete(clock *atomic.Int64, c *client.Client, key, clientID string, sequence uint64) linearizability.Operation {
+	start := clock.Add(1)
+	revision, err := c.Delete(context.Background(), key, clientID, sequence)
+	end := clock.Add(1)
+	op := linearizability.Operation{Start: start, End: end, Kind: linearizability.OpDelete, Key: key}
+	if err != nil {
+		op.Err = clientCodeName(err)
+		return op
+	}
+	op.OK = true
+	op.Revision = revision
+	return op
+}
+
+func clientCodeName(err error) string {
+	if status.Code(err) == codes.NotFound {
+		return "NotFound"
+	}
+	return status.Code(err).String()
 }
