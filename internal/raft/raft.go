@@ -61,6 +61,14 @@ func (n *Node) Leader() uint64    { return n.leader }
 func (n *Node) Commit() uint64    { return n.commit }
 func (n *Node) LastIndex() uint64 { return n.lastIndex() }
 
+func (n *Node) Entries() []Entry {
+	out := make([]Entry, 0, len(n.log)-1)
+	for _, ent := range n.log[1:] {
+		out = append(out, cloneEntry(ent))
+	}
+	return out
+}
+
 func (n *Node) SetElectionTimeout(ticks int) {
 	if ticks < 1 {
 		ticks = 1
