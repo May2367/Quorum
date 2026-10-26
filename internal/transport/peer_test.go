@@ -41,8 +41,8 @@ func TestPeerClientServerSend(t *testing.T) {
 	if stepper.got.Type != raft.MsgAppend || stepper.got.From != 1 || stepper.got.To != 2 || stepper.got.Term != 5 || stepper.got.Index != 6 {
 		t.Fatalf("stepper got %+v", stepper.got)
 	}
-	if len(responses) != 1 || responses[0].Type != raft.MsgAppendResponse || responses[0].From != 2 || responses[0].To != 1 {
-		t.Fatalf("responses = %+v", responses)
+	if len(responses) != 0 {
+		t.Fatalf("responses = %+v, want none for one-way peer delivery", responses)
 	}
 }
 

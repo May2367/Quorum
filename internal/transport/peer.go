@@ -26,11 +26,10 @@ func NewPeerServer(stepper Stepper) *PeerServer {
 }
 
 func (s *PeerServer) Send(_ context.Context, msg *pb.RaftMessage) (*pb.RaftMessages, error) {
-	rd, err := s.stepper.Step(FromProtoMessage(msg))
-	if err != nil {
+	if _, err := s.stepper.Step(FromProtoMessage(msg)); err != nil {
 		return nil, err
 	}
-	return ToProtoMessages(rd.Messages), nil
+	return ToProtoMessages(nil), nil
 }
 
 type PeerClient struct {

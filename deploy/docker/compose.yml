@@ -3,27 +3,51 @@ services:
     build:
       context: ../..
       dockerfile: deploy/docker/Dockerfile
-    command: ["-node-id=1", "-client-addr=:8080", "-peer-addr=:9000", "-data-dir=/data"]
+    command:
+      - "-node-id=1"
+      - "-http-addr=:8080"
+      - "-client-addr=:9090"
+      - "-peer-addr=:9000"
+      - "-data-dir=/data"
+      - "-peers=1=quorum1:9000,2=quorum2:9000,3=quorum3:9000"
     ports:
       - "8081:8080"
+      - "9091:9090"
+      - "9001:9000"
     volumes:
       - quorum1-data:/data
   quorum2:
     build:
       context: ../..
       dockerfile: deploy/docker/Dockerfile
-    command: ["-node-id=2", "-client-addr=:8080", "-peer-addr=:9000", "-data-dir=/data"]
+    command:
+      - "-node-id=2"
+      - "-http-addr=:8080"
+      - "-client-addr=:9090"
+      - "-peer-addr=:9000"
+      - "-data-dir=/data"
+      - "-peers=1=quorum1:9000,2=quorum2:9000,3=quorum3:9000"
     ports:
       - "8082:8080"
+      - "9092:9090"
+      - "9002:9000"
     volumes:
       - quorum2-data:/data
   quorum3:
     build:
       context: ../..
       dockerfile: deploy/docker/Dockerfile
-    command: ["-node-id=3", "-client-addr=:8080", "-peer-addr=:9000", "-data-dir=/data"]
+    command:
+      - "-node-id=3"
+      - "-http-addr=:8080"
+      - "-client-addr=:9090"
+      - "-peer-addr=:9000"
+      - "-data-dir=/data"
+      - "-peers=1=quorum1:9000,2=quorum2:9000,3=quorum3:9000"
     ports:
       - "8083:8080"
+      - "9093:9090"
+      - "9003:9000"
     volumes:
       - quorum3-data:/data
 
@@ -31,4 +55,3 @@ volumes:
   quorum1-data:
   quorum2-data:
   quorum3-data:
-
