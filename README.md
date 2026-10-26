@@ -82,10 +82,16 @@ The server accepts a static peer map:
 Docker Compose passes that map to three nodes:
 
 ```sh
-docker compose -f deploy/docker/compose.yml up --build
+docker compose -f deploy/docker/compose.yml up --build quorum1 quorum2 quorum3
 ```
 
-The cluster wiring starts separate peer gRPC listeners, sends Raft `Ready.Messages` through the peer transport, and supports client redirects. The replicated settlement demo has been smoke-tested against three local `quorumd` processes, and `test/chaos/process-settlement-seeds.sh` runs replayable process-based leader-kill smoke seeds for Docker-free environments. Docker/container chaos and larger network-fault demos are still future work.
+Run the containerized settlement leader-kill smoke workflow:
+
+```sh
+deploy/scripts/docker-settlement-chaos.sh 1
+```
+
+The cluster wiring starts separate peer gRPC listeners, sends Raft `Ready.Messages` through the peer transport, and supports client redirects. The replicated settlement demo has been smoke-tested against three local `quorumd` processes, and `test/chaos/process-settlement-seeds.sh` runs replayable process-based leader-kill smoke seeds for Docker-free environments. The Docker workflow builds a separate tools image with `quorumctl` and `scheduler-demo`, runs the settlement workload inside the Compose network, kills `quorum1`, and verifies a post-kill write through the surviving nodes. Larger container network-fault demos are still future work.
 
 ## Roadmap
 

@@ -1,0 +1,8 @@
+.git
+.gitignore
+/tmp
+*.log
+data
+quorumd
+plan.txt
+progress.txt

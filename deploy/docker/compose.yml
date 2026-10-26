@@ -3,12 +3,15 @@ services:
     build:
       context: ../..
       dockerfile: deploy/docker/Dockerfile
+      target: runtime
     command:
       - "-node-id=1"
       - "-http-addr=:8080"
       - "-client-addr=:9090"
       - "-peer-addr=:9000"
       - "-data-dir=/data"
+      - "-election-timeout=1"
+      - "-heartbeat-timeout=1"
       - "-peers=1=quorum1:9000,2=quorum2:9000,3=quorum3:9000"
     ports:
       - "8081:8080"
@@ -16,16 +19,20 @@ services:
       - "9001:9000"
     volumes:
       - quorum1-data:/data
+
   quorum2:
     build:
       context: ../..
       dockerfile: deploy/docker/Dockerfile
+      target: runtime
     command:
       - "-node-id=2"
       - "-http-addr=:8080"
       - "-client-addr=:9090"
       - "-peer-addr=:9000"
       - "-data-dir=/data"
+      - "-election-timeout=50"
+      - "-heartbeat-timeout=1"
       - "-peers=1=quorum1:9000,2=quorum2:9000,3=quorum3:9000"
     ports:
       - "8082:8080"
@@ -33,16 +40,20 @@ services:
       - "9002:9000"
     volumes:
       - quorum2-data:/data
+
   quorum3:
     build:
       context: ../..
       dockerfile: deploy/docker/Dockerfile
+      target: runtime
     command:
       - "-node-id=3"
       - "-http-addr=:8080"
       - "-client-addr=:9090"
       - "-peer-addr=:9000"
       - "-data-dir=/data"
+      - "-election-timeout=60"
+      - "-heartbeat-timeout=1"
       - "-peers=1=quorum1:9000,2=quorum2:9000,3=quorum3:9000"
     ports:
       - "8083:8080"
@@ -50,6 +61,18 @@ services:
       - "9003:9000"
     volumes:
       - quorum3-data:/data
+
+  tools:
+    profiles:
+      - tools
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+      target: tools
+    depends_on:
+      - quorum1
+      - quorum2
+      - quorum3
 
 volumes:
   quorum1-data:

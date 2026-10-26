@@ -16,7 +16,12 @@ Run a sequential seed range:
 test/chaos/process-settlement-seeds.sh 1 3
 ```
 
-Future Docker/Compose scripts should add seeded leader kills, network
-partitions, latency, and packet loss. Every run should print the seed so
-failures are reproducible.
+Run the Docker Compose leader-kill workflow when Docker is available:
+
+```sh
+deploy/scripts/docker-settlement-chaos.sh 1
+```
+
+Future Docker/Compose scripts should add network partitions, latency, and packet
+loss. Every run should print the seed so failures are reproducible.
 
