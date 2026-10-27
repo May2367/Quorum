@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"quorum/client"
 )
@@ -16,9 +17,10 @@ func main() {
 	endpoints := flag.String("endpoints", "127.0.0.1:9090", "comma-separated node addresses")
 	clientID := flag.String("client-id", "quorumctl", "client ID for write deduplication")
 	sequence := flag.Uint64("seq", 1, "client sequence number for write deduplication")
+	timeout := flag.Duration("timeout", 5*time.Second, "per-RPC timeout")
 	flag.Parse()
 
-	c := client.New(client.Config{Endpoints: splitEndpoints(*endpoints)})
+	c := client.New(client.Config{Endpoints: splitEndpoints(*endpoints), Timeout: *timeout})
 	args := flag.Args()
 	if len(args) == 0 {
 		usage()

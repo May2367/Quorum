@@ -16,6 +16,12 @@ Run a sequential seed range:
 test/chaos/process-settlement-seeds.sh 1 3
 ```
 
+Run a repeated local failover measurement. This starts a fresh three-process cluster per run, kills node 1, polls surviving nodes with short RPC timeouts, and reports milliseconds from leader kill to the first successful write/read confirmation:
+
+```sh
+test/chaos/process-failover-bench.sh 5 1
+```
+
 Run the Docker Compose leader-kill workflow when Docker is available:
 
 ```sh
