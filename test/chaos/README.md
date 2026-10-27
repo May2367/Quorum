@@ -22,6 +22,12 @@ Run a repeated local failover measurement. This starts a fresh three-process clu
 test/chaos/process-failover-bench.sh 5 1
 ```
 
+Run a repeated local restart-recovery measurement. This commits a durable key, stops all three processes, restarts them from the same data directories, and reports milliseconds until the recovered key is readable and a new write commits:
+
+```sh
+test/chaos/process-restart-bench.sh 5 1
+```
+
 Run the Docker Compose leader-kill workflow when Docker is available:
 
 ```sh
