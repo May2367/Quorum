@@ -73,6 +73,15 @@ Example result table:
 | local three-process | 200 | 10 | 66.42 | 149.62 | 214.21 |
 | Docker three-node | needs Docker-capable environment | | | | |
 
+Optimization measurement, local single-node, 200 transfers at concurrency 10:
+
+| change | throughput ops/sec | p50 ms | p99 ms |
+| --- | ---: | ---: | ---: |
+| before WAL Ready batching | 329.19 | 27.96 | 70.67 |
+| after WAL Ready batching | 574.62 | 15.05 | 40.19 |
+
+This batches the Raft entries and hard state from a single Ready into one WAL fsync while preserving the persist-before-send/apply ordering.
+
 ## Run The Single-Node Server
 
 ```sh

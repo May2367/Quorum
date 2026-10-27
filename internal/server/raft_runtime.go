@@ -71,12 +71,7 @@ func (r *PersistentRaft) Close() error {
 
 func (r *PersistentRaft) drainReady() (raft.Ready, error) {
 	rd := r.node.Ready()
-	if len(rd.Entries) > 0 {
-		if err := r.store.AppendEntries(rd.Entries); err != nil {
-			return raft.Ready{}, err
-		}
-	}
-	if err := r.store.SaveHardState(rd.HardState); err != nil {
+	if err := r.store.SaveReady(rd.Entries, rd.HardState); err != nil {
 		return raft.Ready{}, err
 	}
 	return rd, nil

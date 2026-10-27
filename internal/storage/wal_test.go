@@ -30,6 +30,27 @@ func TestWALAppendRead(t *testing.T) {
 	}
 }
 
+func TestWALAppendBatchRead(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "wal")
+	w, err := OpenWAL(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AppendBatch([][]byte{[]byte("one"), []byte("two"), []byte("three")}); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	records, err := ReadWAL(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records) != 3 || string(records[0]) != "one" || string(records[1]) != "two" || string(records[2]) != "three" {
+		t.Fatalf("unexpected records: %q", records)
+	}
+}
+
 func TestWALRecoveryTruncatesTornRecord(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "wal")
 	w, err := OpenWAL(path)

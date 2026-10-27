@@ -44,6 +44,34 @@ func TestRaftStorePersistsHardStateAndEntries(t *testing.T) {
 	}
 }
 
+func TestRaftStoreSaveReadyPersistsEntriesAndHardState(t *testing.T) {
+	dir := t.TempDir()
+	store, err := OpenRaftStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveReady([]raft.Entry{
+		{Index: 1, Term: 2, Data: []byte("one")},
+		{Index: 2, Term: 2, Data: []byte("two")},
+	}, raft.HardState{Term: 2, Vote: 1, Commit: 2}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	state, err := LoadRaftState(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.HardState != (raft.HardState{Term: 2, Vote: 1, Commit: 2}) {
+		t.Fatalf("hard state = %+v", state.HardState)
+	}
+	if len(state.Entries) != 2 || string(state.Entries[0].Data) != "one" || string(state.Entries[1].Data) != "two" {
+		t.Fatalf("entries = %+v", state.Entries)
+	}
+}
+
 func TestRaftStoreRecoveryCanSeedNode(t *testing.T) {
 	dir := t.TempDir()
 	store, err := OpenRaftStore(dir)

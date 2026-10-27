@@ -40,21 +40,17 @@ func OpenRaftStore(dir string) (*RaftStore, error) {
 }
 
 func (s *RaftStore) SaveHardState(hs raft.HardState) error {
-	var record [25]byte
-	record[0] = recordHardState
-	binary.LittleEndian.PutUint64(record[1:9], hs.Term)
-	binary.LittleEndian.PutUint64(record[9:17], hs.Vote)
-	binary.LittleEndian.PutUint64(record[17:25], hs.Commit)
-	return s.wal.Append(record[:])
+	return s.wal.Append(encodeHardState(hs))
 }
 
 func (s *RaftStore) AppendEntries(entries []raft.Entry) error {
-	for _, ent := range entries {
-		if err := s.wal.Append(encodeEntry(ent)); err != nil {
-			return err
-		}
-	}
-	return nil
+	return s.wal.AppendBatch(encodeEntries(entries))
+}
+
+func (s *RaftStore) SaveReady(entries []raft.Entry, hs raft.HardState) error {
+	records := encodeEntries(entries)
+	records = append(records, encodeHardState(hs))
+	return s.wal.AppendBatch(records)
 }
 
 func (s *RaftStore) Close() error {
@@ -89,6 +85,23 @@ func LoadRaftState(dir string) (RaftState, error) {
 		}
 	}
 	return state, nil
+}
+
+func encodeHardState(hs raft.HardState) []byte {
+	var record [25]byte
+	record[0] = recordHardState
+	binary.LittleEndian.PutUint64(record[1:9], hs.Term)
+	binary.LittleEndian.PutUint64(record[9:17], hs.Vote)
+	binary.LittleEndian.PutUint64(record[17:25], hs.Commit)
+	return record[:]
+}
+
+func encodeEntries(entries []raft.Entry) [][]byte {
+	records := make([][]byte, 0, len(entries))
+	for _, ent := range entries {
+		records = append(records, encodeEntry(ent))
+	}
+	return records
 }
 
 func encodeEntry(ent raft.Entry) []byte {

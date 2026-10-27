@@ -25,6 +25,19 @@ func OpenWAL(path string) (*WAL, error) {
 }
 
 func (w *WAL) Append(record []byte) error {
+	return w.AppendBatch([][]byte{record})
+}
+
+func (w *WAL) AppendBatch(records [][]byte) error {
+	for _, record := range records {
+		if err := w.writeRecord(record); err != nil {
+			return err
+		}
+	}
+	return w.f.Sync()
+}
+
+func (w *WAL) writeRecord(record []byte) error {
 	if len(record) > int(^uint32(0)) {
 		return ErrRecordTooLarge
 	}
@@ -34,10 +47,8 @@ func (w *WAL) Append(record []byte) error {
 	if _, err := w.f.Write(hdr[:]); err != nil {
 		return err
 	}
-	if _, err := w.f.Write(record); err != nil {
-		return err
-	}
-	return w.f.Sync()
+	_, err := w.f.Write(record)
+	return err
 }
 
 func (w *WAL) Close() error {
