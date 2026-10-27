@@ -1,0 +1,18 @@
+services:
+  quorum1:
+    build:
+      target: netem-runtime
+    cap_add:
+      - NET_ADMIN
+
+  quorum2:
+    build:
+      target: netem-runtime
+    cap_add:
+      - NET_ADMIN
+
+  quorum3:
+    build:
+      target: netem-runtime
+    cap_add:
+      - NET_ADMIN

@@ -34,6 +34,11 @@ Run the Docker Compose leader-kill workflow when Docker is available:
 deploy/scripts/docker-settlement-chaos.sh 1
 ```
 
-Future Docker/Compose scripts should add network partitions, latency, and packet
-loss. Every run should print the seed so failures are reproducible.
+Run the Docker Compose `tc netem` workflow from a Docker-capable VM. The restricted LoomAI workspace cannot run Docker directly, so use the LoomAI CLI to allocate a separate VM slice for this validation:
+
+```sh
+deploy/scripts/docker-netem-chaos.sh 1
+```
+
+The netem workflow uses a debug runtime image with `iproute2` and `NET_ADMIN`, injects latency/loss on `quorum1`, runs Porcupine-checked KV histories through `quorum2`/`quorum3`, clears the qdisc, and verifies a post-heal write. Every run prints the seed so failures are reproducible.
 
