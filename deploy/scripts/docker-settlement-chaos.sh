@@ -7,7 +7,11 @@ compose_file="deploy/docker/compose.yml"
 endpoints="quorum2:9090,quorum3:9090,quorum1:9090"
 
 compose() {
-  docker compose -p "$project" -f "$compose_file" "$@"
+  if docker compose version >/dev/null 2>&1; then
+    docker compose -p "$project" -f "$compose_file" "$@"
+  else
+    docker-compose -p "$project" -f "$compose_file" "$@"
+  fi
 }
 
 run_tool() {

@@ -8,7 +8,11 @@ netem_file="deploy/docker/compose.netem.yml"
 endpoints="quorum2:9090,quorum3:9090,quorum1:9090"
 
 compose() {
-  docker compose -p "$project" -f "$compose_file" -f "$netem_file" "$@"
+  if docker compose version >/dev/null 2>&1; then
+    docker compose -p "$project" -f "$compose_file" -f "$netem_file" "$@"
+  else
+    docker-compose -p "$project" -f "$compose_file" -f "$netem_file" "$@"
+  fi
 }
 
 run_tool() {
@@ -63,8 +67,8 @@ echo "seed=$seed phase=netem-apply target=quorum1 delay_ms=250 loss_pct=15"
 apply_netem quorum1 250 15
 sleep 5
 
-echo "seed=$seed phase=netem-majority-history endpoints=quorum2:9090,quorum3:9090"
-run_tool /kv-history-check -timeout=2s -endpoints=quorum2:9090,quorum3:9090 -key="netem/history-$seed" -seed="$seed" -rounds=4
+echo "seed=$seed phase=netem-history endpoints=$endpoints"
+run_tool /kv-history-check -timeout=3s -op-timeout=30s -endpoints="$endpoints" -key="netem/history-$seed" -seed="$seed" -rounds=4
 
 echo "seed=$seed phase=netem-clear target=quorum1"
 clear_netem quorum1

@@ -40,5 +40,5 @@ Run the Docker Compose `tc netem` workflow from a Docker-capable VM. The restric
 deploy/scripts/docker-netem-chaos.sh 1
 ```
 
-The netem workflow uses a debug runtime image with `iproute2` and `NET_ADMIN`, injects latency/loss on `quorum1`, runs Porcupine-checked KV histories through `quorum2`/`quorum3`, clears the qdisc, and verifies a post-heal write. Every run prints the seed so failures are reproducible.
+The netem workflow uses a debug runtime image with `iproute2` and `NET_ADMIN`, injects latency/loss on `quorum1`, runs Porcupine-checked KV histories through all three endpoints, clears the qdisc, and verifies a post-heal write. Every run prints the seed so failures are reproducible.
 
