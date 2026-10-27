@@ -1,0 +1,9 @@
+aws_region  = "us-east-1"
+name_prefix = "quorum"
+
+# Keep these empty and use SSM port forwarding for the tightest default access.
+client_cidr_blocks = []
+health_cidr_blocks = []
+
+# Override if default subnet host addresses are already occupied.
+private_ip_host_offsets = [101, 102, 103]

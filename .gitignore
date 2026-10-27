@@ -11,5 +11,10 @@ coverage.out
 
 deploy/docker/*.env
 
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+
 plan.txt
 progress.txt

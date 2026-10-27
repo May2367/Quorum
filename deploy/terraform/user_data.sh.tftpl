@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+set -euo pipefail
+exec > >(tee -a /var/log/quorum-bootstrap.log | logger -t quorum-bootstrap -s 2>/dev/console) 2>&1
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y docker.io awscli unzip ca-certificates snapd
+systemctl enable --now docker
+snap install amazon-ssm-agent --classic || true
+systemctl enable --now snap.amazon-ssm-agent.amazon-ssm-agent.service 2>/dev/null || systemctl enable --now amazon-ssm-agent 2>/dev/null || true
+
+mkdir -p /opt/quorum /var/lib/quorum
+aws s3 cp "s3://${source_bucket}/${source_key}" /opt/quorum/source.zip --region "${aws_region}"
+rm -rf /opt/quorum/src
+mkdir -p /opt/quorum/src
+unzip -q /opt/quorum/source.zip -d /opt/quorum/src
+
+for _ in $(seq 1 180); do
+  for dev in /dev/xvdf /dev/nvme1n1; do
+    if [ -b "$dev" ]; then
+      data_dev="$dev"
+      break 2
+    fi
+  done
+  sleep 1
+done
+
+if [ -z "$${data_dev:-}" ]; then
+  echo "data volume not found" >&2
+  exit 1
+fi
+
+if ! blkid "$data_dev" >/dev/null 2>&1; then
+  mkfs.ext4 -F "$data_dev"
+fi
+
+if ! grep -q ' /var/lib/quorum ' /etc/fstab; then
+  uuid=$(blkid -s UUID -o value "$data_dev")
+  echo "UUID=$uuid /var/lib/quorum ext4 defaults,nofail 0 2" >> /etc/fstab
+fi
+mount -a
+
+cd /opt/quorum/src
+docker build -f deploy/docker/Dockerfile --target runtime -t quorum:aws .
+
+cat >/etc/systemd/system/quorumd.service <<'UNIT'
+[Unit]
+Description=Quorum Raft node
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Restart=always
+RestartSec=5
+ExecStartPre=-/usr/bin/docker rm -f quorumd
+ExecStart=/usr/bin/docker run --rm --name quorumd --network host -v /var/lib/quorum:/data quorum:aws -node-id=${node_id} -http-addr=:8080 -client-addr=:9090 -peer-addr=:9000 -data-dir=/data -election-timeout=${election_timeout} -heartbeat-timeout=1 -peers=${peer_map}
+ExecStop=/usr/bin/docker stop quorumd
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable --now quorumd
