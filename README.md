@@ -1,8 +1,8 @@
 # Quorum
 
-Quorum is a Raft-based coordination service in Go. The core project is a replicated key-value store with WAL persistence, CAS, sessions, watches, and a path toward leases and fencing tokens. The flagship workload is a small settlement ledger that makes the distributed-systems guarantees concrete: workers settle idempotent money-movement jobs while duplicate retries and stale fencing tokens are rejected.
+Quorum is a Raft-based coordination service in Go. The core project is a replicated key-value store with WAL persistence, CAS, sessions, leader redirects, watches, locks/leases, and fencing tokens. The flagship workload is a small settlement ledger that makes the distributed-systems guarantees concrete: workers settle idempotent money-movement jobs through replicated lock and ledger APIs while duplicate retries, stale fencing tokens, and overdrafts are rejected.
 
-This is an undergraduate resume project, so the repository favors a clear end-to-end story over production breadth. The current code is a foundation plus a replicated settlement workload, seeded Raft safety tests, WAL-backed restart coverage, static peer transport wiring, public lock/ledger APIs, and client redirect support. Broader Porcupine fault-injection campaigns, network-fault chaos tests, failover/recovery benchmarks, and AWS deployment remain roadmap items.
+The current code includes a replicated KV service, CRC-checked WAL persistence, a replicated lock/ledger workload, seeded Raft safety tests, Porcupine-backed KV history checks, process-based failover/restart measurements, Docker Compose settlement chaos, and Docker `tc netem` validation performed on a Docker-capable VM.
 
 ## What Works Now
 
@@ -15,12 +15,15 @@ This is an undergraduate resume project, so the repository favors a clear end-to
 - `cmd/quorumd`: server with separate HTTP, client gRPC, and peer gRPC listeners.
 - `cmd/quorumctl`: KV, lock, and ledger client CLI.
 - `cmd/scheduler-demo`: replicated settlement workload demo with 20 workers and 500 jobs.
-- `deploy/docker`: initial three-node Compose wiring with static peer addresses.
-- `deploy/terraform`, `test/chaos`, `test/linearizability`: scaffolding for the later deployment and verification story.
+- `internal/linearizability`: KV operation-history model with local and Porcupine checkers.
+- `cmd/kv-history-check`: replayable KV history generator/checker used by Docker netem chaos.
+- `deploy/docker`: three-node Compose wiring with static peer addresses, plus a netem-enabled runtime target.
+- `test/chaos`: process-based settlement, failover, restart-recovery scripts, plus Docker-oriented chaos entry points.
+- `deploy/terraform`: AWS Terraform scaffold for a three-node EC2 topology.
 
 ## Correctness Tests
 
-The current safety suite checks the Raft foundation before adding more server breadth:
+The current safety suite checks the Raft foundation, persistent runtime behavior, replicated APIs, settlement invariants, and KV linearizability histories:
 
 - 50 deterministic randomized simulator seeds.
 - At most one leader per term.
@@ -71,7 +74,6 @@ Example result table:
 | --- | ---: | ---: | ---: | ---: | ---: |
 | local single-node | 200 | 10 | 209.50 | 45.56 | 92.53 |
 | local three-process | 200 | 10 | 66.42 | 149.62 | 214.21 |
-| Docker three-node | needs Docker-capable environment | | | | |
 
 Optimization measurement, local single-node, 200 transfers at concurrency 10:
 
@@ -117,15 +119,11 @@ Run the containerized settlement leader-kill smoke workflow:
 deploy/scripts/docker-settlement-chaos.sh 1
 ```
 
-The cluster wiring starts separate peer gRPC listeners, sends Raft `Ready.Messages` through the peer transport, and supports client redirects. The replicated settlement demo has been smoke-tested against three local `quorumd` processes, and `test/chaos/process-settlement-seeds.sh` runs replayable process-based leader-kill smoke seeds for Docker-free environments. The Docker workflow builds a separate tools image with `quorumctl` and `scheduler-demo`, runs the settlement workload inside the Compose network, kills `quorum1`, and verifies a post-kill write through the surviving nodes. Larger container network-fault demos are still future work.
+The cluster wiring starts separate peer gRPC listeners, sends Raft `Ready.Messages` through the peer transport, and supports client redirects. The replicated settlement demo has been smoke-tested against three local `quorumd` processes, and `test/chaos/process-settlement-seeds.sh` runs replayable process-based leader-kill smoke seeds for Docker-free environments. The Docker settlement workflow builds a tools image with `quorumctl` and `scheduler-demo`, runs the 20-worker / 500-job settlement workload inside the Compose network, kills `quorum1`, and verifies a post-kill write through the surviving nodes.
 
-## Roadmap
+The Docker `tc netem` workflow was validated on a separate Docker-capable LoomAI/FABRIC VM because this workspace cannot run Docker directly. It injects 250 ms delay and 15% packet loss on `quorum1`, runs Porcupine-checked KV histories through all three endpoints, clears the qdisc, and verifies a post-heal write. Published validation currently covers seeds 1-3.
 
-1. Add containerized settlement chaos with worker/leader kills and replayable seeds.
-2. Add Porcupine or a scalable linearizability checker for larger fault-injected histories.
-3. Add Docker chaos runs, benchmarks, and one optimization pass.
-4. Add minimal AWS Terraform deployment and recorded cross-AZ numbers.
-5. Make revision-resumable watches production-quality or leave them clearly documented as a stretch goal.
+The AWS Terraform under `deploy/terraform` is scaffold-only and has not been applied or validated against real AWS resources.
 
 ## Scope Limits
 

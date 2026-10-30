@@ -4,16 +4,12 @@ Quorum is a Raft-backed coordination service. Raft orders opaque commands, the
 state machine applies them deterministically, and clients interact with the
 leader through a KV API with sessions, CAS, leases, fencing tokens, and watches.
 
-Current milestone:
+Quorum is organized around a small Raft core, deterministic state machines, and thin server/transport layers:
 
-- Pure Raft package with leader election and log replication tests.
-- Append-only WAL with CRC and torn-write recovery.
-- In-memory KV state machine with CAS, session dedup, revisions, and watch events.
-- Health/readiness HTTP endpoints for the future server process.
-
-Next milestone:
-
-- Persist Raft hard state and log entries through `internal/storage`.
-- Add the gRPC transport and generated protobuf bindings.
-- Wire `cmd/quorumd` into a real three-node cluster.
-
+- `internal/raft` implements leader election, log replication, quorum commit, and Ready-style output.
+- `internal/storage` persists Raft hard state and log records in a CRC-checked append-only WAL with fsync and corrupt-tail recovery.
+- `internal/server` wires the persistent Raft runtime to KV, lock, and ledger gRPC handlers, committed-log replay, leader redirects, and HTTP health/readiness endpoints.
+- `internal/transport` provides protobuf conversion and gRPC peer delivery for Raft messages.
+- `internal/statemachine` contains deterministic KV, lock/fencing, and settlement ledger state machines.
+- `cmd/quorumd` runs separate HTTP, client gRPC, and peer gRPC listeners.
+- Static three-node clusters are configured through explicit peer maps.
